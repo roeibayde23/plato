@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   var KEY = "plato-v1";
-  var SCHEMA = 1;
+  var SCHEMA = 2;
   var DB = window.PLATO_DB || { daily_target: {}, ingredients: [] };
   var T = DB.daily_target || {};
 
@@ -30,6 +30,8 @@
       ],
       customIngredients: [],
       fixes: [],           // owner-only fix list: {id,text,done,createdAt}
+      weights: [],         // weight history: {id,date:"YYYY-MM-DD",kg,at} (one per day, sorted by date)
+      usage: {},           // learning order: key (ingredient id or "dish:"+id) -> {n: decayed count, last: ms}
       updatedAt: Date.now()
     };
   }
@@ -44,8 +46,10 @@
 
   function migrate(s) {
     var d = defaults();
-    if (!s || typeof s !== "object") return d;
+    if (!s || typeof s !== "object") s = d;
     for (var k in d) if (s[k] === undefined) s[k] = d[k];
+    // v2: start the weight history from the profile weight he already entered
+    if (!s.weights.length && s.profile && s.profile.weight > 0) s.weights.push({ id: uid(), date: dateKey(new Date(s.updatedAt || Date.now())), kg: s.profile.weight, at: s.updatedAt || Date.now() });
     s.schema = SCHEMA;
     return s;
   }
@@ -58,6 +62,13 @@
     var t = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
     items.forEach(function (i) { t.kcal += i.kcal; t.protein += i.protein; t.carbs += i.carbs; t.fat += i.fat; });
     return t;
+  }
+
+  var HALF_LIFE = 30 * 864e5;
+  function decay(e, now) { return e.n * Math.pow(0.5, Math.max(0, now - e.last) / HALF_LIFE); }
+  function syncWeight() {
+    var w = st().weights.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.at - b.at; });
+    if (w.length) st().profile.weight = w[w.length - 1].kg;
   }
 
   var Store = {
@@ -103,6 +114,24 @@
     addFix: function (text) { st().fixes.unshift({ id: uid(), text: text, done: false, createdAt: Date.now() }); save(); },
     toggleFix: function (id) { st().fixes.forEach(function (f) { if (f.id === id) f.done = !f.done; }); save(); },
     deleteFix: function (id) { st().fixes = st().fixes.filter(function (f) { return f.id !== id; }); save(); },
+
+    // weight history; profile.weight always mirrors the latest entry
+    weights: function () { return clone(st().weights).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.at - b.at; }); },
+    addWeight: function (kg, date) {
+      var s = st(); date = date || dateKey();
+      var ex = s.weights.filter(function (w) { return w.date === date; })[0];
+      if (ex) { ex.kg = kg; ex.at = Date.now(); } else s.weights.push({ id: uid(), date: date, kg: kg, at: Date.now() });
+      syncWeight(); save();
+    },
+    deleteWeight: function (id) { st().weights = st().weights.filter(function (w) { return w.id !== id; }); syncWeight(); save(); },
+
+    // learning order: decayed use count (half-life 30 days) so frequent AND recent items rise
+    recordUse: function (keys) {
+      var u = st().usage, now = Date.now();
+      keys.forEach(function (k) { var e = u[k]; u[k] = { n: (e ? decay(e, now) : 0) + 1, last: now }; });
+      save();
+    },
+    useScore: function (key) { var e = st().usage[key]; return e ? decay(e, Date.now()) : 0; },
 
     exportJSON: function () { return JSON.stringify({ app: "PLATO", exportedAt: new Date().toISOString(), data: st() }, null, 2); },
     importJSON: function (text) {
