@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   var KEY = "plato-v1";
-  var SCHEMA = 2;
+  var SCHEMA = 3;
   var DB = window.PLATO_DB || { daily_target: {}, ingredients: [] };
   var T = DB.daily_target || {};
 
@@ -31,6 +31,8 @@
       customIngredients: [],
       fixes: [],           // owner-only fix list: {id,text,done,createdAt}
       weights: [],         // weight history: {id,date:"YYYY-MM-DD",kg,at} (one per day, sorted by date)
+      overrides: {},       // v3: edits to built-in (Aki) ingredients: id -> {userId, per_100g, unit, updatedAt}
+      prefs: { homeVariant: "B", tip: { date: "", hidden: false, rot: 0 } },
       usage: {},           // learning order: key (ingredient id or "dish:"+id) -> {n: decayed count, last: ms}
       updatedAt: Date.now()
     };
@@ -95,6 +97,12 @@
       var m = { id: uid(), userId: s.userId, type: meal.type, createdAt: Date.now(), items: meal.items, totals: sumTotals(meal.items) };
       s.days[key].meals.push(m); save(); return clone(m);
     },
+    updateMeal: function (key, id, meal) {
+      var d = st().days[key]; if (!d) return null;
+      var m = d.meals.filter(function (x) { return x.id === id; })[0]; if (!m) return null;
+      m.type = meal.type || m.type; m.items = meal.items; m.totals = sumTotals(meal.items); m.editedAt = Date.now();
+      save(); return clone(m);
+    },
     deleteMeal: function (key, id) {
       var d = st().days[key]; if (!d) return;
       d.meals = d.meals.filter(function (m) { return m.id !== id; });
@@ -108,6 +116,12 @@
 
     customs: function () { return clone(st().customIngredients); },
     addCustom: function (c) { c.id = "custom_" + uid(); c.userId = st().userId; st().customIngredients.push(c); save(); return clone(c); },
+    updateCustom: function (id, patch) { st().customIngredients.forEach(function (c) { if (c.id === id) Object.assign(c, patch); }); save(); },
+    overrides: function () { return clone(st().overrides); },
+    setOverride: function (id, o) { o.userId = st().userId; o.updatedAt = Date.now(); st().overrides[id] = o; save(); },
+    resetOverride: function (id) { delete st().overrides[id]; save(); },
+    prefs: function () { return clone(st().prefs); },
+    setPrefs: function (p) { Object.assign(st().prefs, p); save(); },
     deleteCustom: function (id) { st().customIngredients = st().customIngredients.filter(function (c) { return c.id !== id; }); save(); },
 
     fixes: function () { return clone(st().fixes); },

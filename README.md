@@ -10,6 +10,7 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
 ## Test (Playwright, 390x844)
     python3 test/e2e.py http://127.0.0.1:8781/
     python3 test/fixes_ios.py http://127.0.0.1:8781/   # WebKit / iPhone 13 regression test for שיפוצים (needs: python3 -m playwright install webkit)
+    python3 test/v5.py http://127.0.0.1:8781/          # v5 features: tips, goals, teaspoon, save effect, DB edit, day view
 Screenshots go to `shots/`.
 
 ## Files
