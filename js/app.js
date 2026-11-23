@@ -697,33 +697,60 @@
     if (h.indexOf("#/build") === 0 || h.indexOf("#/login") === 0 || $sheet.innerHTML) return;   // never yank the screen he is working in
     route();
   }
+  // ---- login: email → 6-digit code (same Supabase OTP flow as CASA; no passwords) ----
+  var OTPK = "plato-otp", OTP_WAIT = 60000, otpTick = null;
+  function otpPending() { try { var o = JSON.parse(localStorage.getItem(OTPK) || "null"); return o && o.email && Date.now() - o.at < 3600000 ? o : null; } catch (e) { return null; } }
+  function otpLeft() { var o = otpPending(); return o ? Math.max(0, Math.ceil((OTP_WAIT - (Date.now() - o.at)) / 1000)) : 0; }
+  function resendLabel() { var l = otpLeft(); return l ? "שליחה מחדש בעוד " + Math.floor(l / 60) + ":" + ("0" + (l % 60)).slice(-2) : "לא הגיע? שליחה מחדש"; }
+  function paintResend() {
+    var r = document.getElementById("aResend"); if (!r) { clearInterval(otpTick); otpTick = null; return; }
+    r.disabled = otpLeft() > 0; r.textContent = resendLabel();
+  }
   function renderLogin() {
-    var t = ui.authTab || "in", conf = ui.authConfirm;
-    var tabs = '<div class="seg auth"><button class="' + (t === "in" ? "on" : "") + '" data-authtab="in">התחברות</button><button class="' + (t === "up" ? "on" : "") + '" data-authtab="up">הרשמה</button></div>';
-    var body = conf ? '<div class="confirm"><div class="big emoji">📬</div><h3>כמעט סיימנו!</h3><p>שלחנו מייל אימות אל<br><b dir="ltr">' + esc(conf) + "</b></p><p>לוחצים על הקישור במייל, ואז חוזרים לכאן ומתחברים עם אותה סיסמה.</p>" +
-        '<button class="btn pri" data-act="authtologin">להתחברות</button><button class="lnk2" data-act="resend">לא הגיע? שליחה חוזרת</button></div>'
-      : tabs + '<form id="authForm" class="aform" action="#" novalidate>' +
-        '<label class="af"><span>אימייל</span><input id="aEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" placeholder="name@example.com" value="' + esc(ui.authEmail || "") + '" required></label>' +
-        '<label class="af"><span>סיסמה</span><span class="pw"><input id="aPw" type="password" autocomplete="' + (t === "up" ? "new-password" : "current-password") + '" dir="ltr" placeholder="' + (t === "up" ? "לפחות 6 תווים" : "••••••") + '" required><button type="button" class="eye" data-act="pweye" aria-label="הצגת סיסמה">' + ICON.eye(false) + "</button></span></label>" +
+    var o = otpPending(), body;
+    if (o) {
+      body = '<form id="codeForm" class="aform" action="#" novalidate><div class="otpto"><div class="big emoji">📬</div><h3>בדקו את המייל</h3><p>שלחנו קוד כניסה אל<br><b dir="ltr">' + esc(o.email) + '</b></p></div>' +
+        '<label class="af"><span>הקוד מהמייל</span><input id="aCode" class="codein" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" dir="ltr" placeholder="••••••" required></label>' +
         '<div class="aerr" id="aErr" role="alert"></div>' +
-        '<button type="submit" class="btn pri" id="aGo">' + (t === "up" ? "יצירת חשבון" : "התחברות") + "</button></form>" +
-        '<p class="ahint">' + (t === "up" ? "אחרי ההרשמה יגיע מייל אימות קצר. כל מה שכבר רשמת בטלפון יעלה לחשבון." : "יש לך חשבון CASA? אפשר להתחבר עם אותם פרטים.") + "</p>";
+        '<button type="submit" class="btn pri" id="aGo">כניסה</button></form>' +
+        '<div class="otpacts"><button type="button" class="lnk2" id="aResend" data-act="resendcode"' + (otpLeft() ? " disabled" : "") + ">" + resendLabel() + '</button><button type="button" class="lnk2" data-act="otpback">החלפת מייל</button></div>' +
+        '<p class="ahint">הגיע קישור במקום קוד? אפשר ללחוץ עליו. כדאי לבדוק גם בספאם.</p>';
+    } else {
+      body = '<form id="authForm" class="aform" action="#" novalidate>' +
+        '<label class="af"><span>אימייל</span><input id="aEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" placeholder="name@example.com" value="' + esc(ui.authEmail || "") + '" required></label>' +
+        '<div class="aerr" id="aErr" role="alert"></div>' +
+        '<button type="submit" class="btn pri" id="aGo">שלח לי קוד</button></form>' +
+        '<p class="ahint">נשלח למייל קוד כניסה בן 6 ספרות, בלי סיסמה.<br>יש לך חשבון CASA? זה אותו מייל.</p>';
+    }
     $app.innerHTML = '<div class="login"><div class="lhead"><img src="icons/logo.png" alt=""><b>PLATO</b><p>שומרים את הנתונים בענן,<br>ממשיכים מכל מכשיר.</p></div>' +
       '<div class="lcard">' + body + "</div>" +
-      (conf ? "" : '<button class="skip" data-act="skiplogin">המשך בלי חשבון ←</button><p class="lfoot">אפשר להתחבר מאוחר יותר מההגדרות. בלי חשבון הנתונים נשמרים רק בטלפון הזה.</p>') + "</div>";
+      (o ? "" : '<button class="skip" data-act="skiplogin">המשך בלי חשבון ←</button><p class="lfoot">אפשר להתחבר מאוחר יותר מההגדרות. בלי חשבון הנתונים נשמרים רק בטלפון הזה.</p>') + "</div>";
+    clearInterval(otpTick); otpTick = o ? setInterval(paintResend, 1000) : null;
+    var f = document.getElementById(o ? "aCode" : "aEmail"); if (f && (o || !ui.authEmail)) setTimeout(function () { try { f.focus({ preventScroll: true }); } catch (e) {} }, 60);
   }
   function authBusy(on, msg) { var b = document.getElementById("aGo"); if (b) { b.disabled = on; if (msg) b.textContent = msg; } }
   function authErr(m) { var e = document.getElementById("aErr"); if (e) e.textContent = m || ""; }
+  function sendCode(em, again) {
+    return Cloud.sendCode(em).then(function () {
+      localStorage.setItem(OTPK, JSON.stringify({ email: em, at: Date.now() }));
+      if (again) { paintResend(); authErr(""); toast("שלחנו קוד חדש ✉️"); } else renderLogin();
+    });
+  }
   function doAuth() {
-    var em = (document.getElementById("aEmail").value || "").trim(), pw = document.getElementById("aPw").value || "", up = ui.authTab === "up";
+    var em = (document.getElementById("aEmail").value || "").trim().toLowerCase();
     ui.authEmail = em;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return authErr("כתובת האימייל לא נראית תקינה");
-    if (pw.length < 6) return authErr("הסיסמה צריכה לפחות 6 תווים");
-    authErr(""); authBusy(true, up ? "יוצר חשבון…" : "מתחבר…");
-    (up ? Cloud.signUp(em, pw) : Cloud.signIn(em, pw).then(function () { return { confirm: false }; })).then(function (r) {
-      if (r.confirm) { ui.authConfirm = em; renderLogin(); return; }
-      loadIngredients(); ui.authConfirm = null; go("#/"); toast("מחובר · הנתונים מסונכרנים ☁️");
-    }).catch(function (e) { authBusy(false, up ? "יצירת חשבון" : "התחברות"); authErr(e.message || "לא הצלחתי להתחבר"); });
+    authErr(""); authBusy(true, "שולח…");
+    sendCode(em).catch(function (e) { authBusy(false, "שלח לי קוד"); authErr(e.message || "לא הצלחתי לשלוח קוד"); });
+  }
+  function doCode() {
+    var o = otpPending(), c = (document.getElementById("aCode").value || "").replace(/\D/g, "");
+    if (!o) return renderLogin();
+    if (c.length < 6) return authErr("הקוד בן 6 ספרות");
+    authErr(""); authBusy(true, "בודק…");
+    Cloud.verifyCode(o.email, c).then(function () {
+      localStorage.removeItem(OTPK); clearInterval(otpTick); loadIngredients(); go("#/"); toast("מחובר · הנתונים מסונכרנים ☁️");
+    }).catch(function (e) { authBusy(false, "כניסה"); authErr(e.message || "לא הצלחתי להתחבר"); });
   }
   function sheetApp() {
     openSheet(head("אפליקציה", "📱") + '<div class="sh-body"><div class="frow"><span>גרסה</span><span class="vv">' + n("v" + APP_VERSION) + '</span></div><div class="frow"><span>הנתונים</span><span class="vv">' + (window.Cloud && Cloud.session() ? "בטלפון + בענן" : "נשמרים בטלפון הזה") + '</span></div></div>' +
@@ -975,15 +1002,14 @@
         case "import": document.getElementById("importFile").click(); return;
         case "photo": document.getElementById("photoFile").click(); return;
         case "skiplogin": Cloud.chooseLocal(); go("#/"); return;
-        case "authtologin": ui.authTab = "in"; ui.authConfirm = null; renderLogin(); return;
-        case "resend": Cloud.resend(ui.authConfirm).then(function () { toast("שלחנו שוב ✉️"); }).catch(function (e) { toast(e.message); }); return;
-        case "pweye": var pi = document.getElementById("aPw"); pi.type = pi.type === "password" ? "text" : "password"; el.innerHTML = ICON.eye(pi.type === "text"); return;
+        case "otpback": var op = otpPending(); if (op) ui.authEmail = op.email; localStorage.removeItem(OTPK); renderLogin(); return;
+        case "resendcode": var oq = otpPending(); if (!oq) { renderLogin(); return; } if (otpLeft()) { paintResend(); return; }
+          el.disabled = true; sendCode(oq.email, true).catch(function (e) { paintResend(); authErr(e.message || "לא הצלחתי לשלוח קוד"); }); return;
         case "syncnow": Cloud.syncNow().then(function () { var c2 = Cloud.status(); toast(c2.state === "ok" ? "מסונכרן ✓" : syncText(c2)); }); return;
         case "logout": if (!arm(el, "logout")) return; Cloud.signOut().then(function () { closeSheet(); renderSettings(); toast("התנתקת · הנתונים נשארו שמורים"); }); return;
         case "rmphoto": setPhoto(null); toast("התמונה הוסרה"); return;
       }
     }
-    if ((el = t.closest("[data-authtab]"))) { ui.authTab = el.getAttribute("data-authtab"); var ae = document.getElementById("aEmail"); if (ae) ui.authEmail = ae.value; renderLogin(); return; }
     if ((el = t.closest("[data-pick]"))) {
       document.querySelectorAll(".mo").forEach(function (m) { m.classList.toggle("sel", m === el); m.setAttribute("aria-pressed", m === el); });
       document.getElementById("goName").textContent = el.getAttribute("data-pick"); return;
@@ -1023,6 +1049,7 @@
   });
 
   document.addEventListener("input", function (ev) {
+    if (ev.target.id === "aCode") { var cv = ev.target.value.replace(/\D/g, "").slice(0, 10); if (cv !== ev.target.value) ev.target.value = cv; authErr(""); return; }
     if (ev.target.id === "dbq") { ui.dbQ = ev.target.value; refreshDB(); return; }
     if (/^g[KPCF]$/.test(ev.target.id)) { goalCalc(); return; }
     if (ev.target.id === "q" && draft) {
@@ -1079,6 +1106,7 @@
   }
   document.addEventListener("submit", function (ev) {
     if (ev.target.id === "authForm") { ev.preventDefault(); doAuth(); return; }
+    if (ev.target.id === "codeForm") { ev.preventDefault(); doCode(); return; }
     if (ev.target.id !== "fixForm") return;
     ev.preventDefault();
     var ok = commitFix(); ui.fixesOpen = true; ui.fixAdding = true; renderSettings();

@@ -1,4 +1,4 @@
-/* PLATO v8 cloud: email+password login (Supabase Auth) and local-first sync of the whole Store document.
+/* PLATO v9 cloud: email + one-time code login (Supabase Auth OTP, same flow as CASA) and local-first sync of the whole Store document.
    - localStorage stays the source the UI reads; the server copy lives in public.plato_state (one jsonb row per user, RLS own row).
    - push: debounced after every local save; pull: on open, focus/visibility and when the network comes back.
    - every sync is pull → merge (newest record wins, tombstones) → apply locally → upsert, so no device overwrites newer data.
@@ -24,13 +24,14 @@
   }
 
   function errMsg(j, code) {
-    var m = (j && (j.msg || j.error_description || j.message || j.error)) || "";
-    if (/invalid login credentials/i.test(m)) return "אימייל או סיסמה לא נכונים";
-    if (/email not confirmed/i.test(m)) return "צריך לאשר את המייל קודם — חפשו את מייל האימות בתיבה (גם בספאם)";
-    if (/already registered|already exists/i.test(m)) return "כבר יש חשבון עם המייל הזה — אפשר פשוט להתחבר";
-    if (/password should be|at least 6|weak/i.test(m)) return "הסיסמה קצרה מדי — לפחות 6 תווים";
-    if (/rate limit|too many|over_email_send_rate_limit/i.test(m) || code === 429) return "יותר מדי ניסיונות כרגע — נסו שוב בעוד כמה דקות";
-    if (/valid email|invalid email|unable to validate email/i.test(m)) return "כתובת האימייל לא נראית תקינה";
+    var m = (j && (j.msg || j.error_description || j.message || j.error)) || "", ec = (j && j.error_code) || "";
+    var wait = /after (\d+) seconds?/i.exec(m);
+    if (wait) return "אפשר לבקש קוד חדש בעוד " + wait[1] + " שניות";
+    if (ec === "over_email_send_rate_limit" || /rate limit|too many|only request/i.test(m) || code === 429) return "נשלחו יותר מדי קודים בזמן קצר — חכו כמה דקות ונסו שוב";
+    if (ec === "otp_expired" || /expired|invalid.*(token|otp)|token.*invalid/i.test(m)) return "הקוד לא נכון או שפג תוקפו — אפשר לבקש קוד חדש";
+    if (ec === "email_address_not_authorized" || /not authorized/i.test(m)) return "שרת המייל עדיין לא שולח לכתובת הזו (פתוח רק לכתובות מאושרות)";
+    if (ec === "otp_disabled" || /signups not allowed/i.test(m)) return "אין חשבון עם המייל הזה, ויצירת חשבון חדש כבוי כרגע";
+    if (/valid email|invalid email|unable to validate email|invalid format/i.test(m)) return "כתובת האימייל לא נראית תקינה";
     return m ? "שגיאה: " + m : "לא הצלחתי להתחבר לשרת";
   }
   function api(path, opt) {
@@ -150,17 +151,19 @@
     session: function () { var s = sess(); return s ? { email: s.user.email, id: s.user.id } : null; },
     mode: function () { return sess() ? "cloud" : localStorage.getItem(MKEY) || ""; },
     chooseLocal: function () { localStorage.setItem(MKEY, "local"); },
-    signIn: function (email, pw) {
-      return api("/auth/v1/token?grant_type=password", { method: "POST", json: { email: email, password: pw } }).then(function (j) { return afterLogin(keep(j)); });
-    },
-    signUp: function (email, pw) {
+    // Step 1: email the 6-digit code. Same call as CASA's signInWithOtp({shouldCreateUser:true, emailRedirectTo}).
+    // Existing users (Roei's CASA account) get CASA's "Magic Link" mail, which carries {{ .Token }}; redirect_to makes the link variant land back here.
+    sendCode: function (email) {
       var back = location.origin + location.pathname;
-      return api("/auth/v1/signup?redirect_to=" + encodeURIComponent(back), { method: "POST", json: { email: email, password: pw, data: { app: "plato" } } }).then(function (j) {
-        if (j && j.access_token) return afterLogin(keep(j)).then(function () { return { confirm: false }; });
-        return { confirm: true };   // project requires email confirmation (CASA setting): no session until the link is clicked
+      return api("/auth/v1/otp?redirect_to=" + encodeURIComponent(back), { method: "POST", json: { email: email, create_user: true, data: {}, gotrue_meta_security: {} } });
+    },
+    // Step 2: trade the code for a session (then the usual first sync).
+    verifyCode: function (email, code) {
+      return api("/auth/v1/verify", { method: "POST", json: { type: "email", email: email, token: code, gotrue_meta_security: {} } }).then(function (j) {
+        var se = keep(j); if (!se) { var e = new Error("הקוד לא נכון או שפג תוקפו — אפשר לבקש קוד חדש"); throw e; }
+        return afterLogin(se);
       });
     },
-    resend: function (email) { return api("/auth/v1/resend", { method: "POST", json: { type: "signup", email: email } }); },
     signOut: function () {
       var se = sess(), p = se ? run("logout").catch(function () {}).then(function () { return api("/auth/v1/logout", { method: "POST", headers: { Authorization: "Bearer " + se.access_token } }).catch(function () {}); }) : Promise.resolve();
       return p.then(function () { jset(AKEY, null); jset(SKEY, null); localStorage.setItem(MKEY, "local"); hooks.onStatus(status()); });

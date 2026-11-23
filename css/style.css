@@ -510,6 +510,14 @@ body.nofab #tipfab{display:none}
 .confirm h3{font:700 22px "Frank Ruhl Libre";color:var(--brd);margin:6px 0 8px}
 .confirm p{font-size:15px;line-height:1.5;color:var(--ink);margin-bottom:8px}
 .confirm .btn{margin-top:10px}
+.otpto{text-align:center;padding:2px 4px 0}
+.otpto .big{font-size:42px;line-height:1}
+.otpto h3{font:700 22px "Frank Ruhl Libre";color:var(--brd);margin:6px 0 6px}
+.otpto p{font-size:15px;line-height:1.5;color:var(--ink)}
+.otpto b{word-break:break-all}
+.af input.codein{height:58px;text-align:center;font:700 26px Assistant;letter-spacing:.32em;padding:0 0 0 .32em}
+.otpacts{display:flex;justify-content:space-between;gap:10px;margin-top:4px}
+.otpacts .lnk2:disabled{text-decoration:none;opacity:.75}
 .lnk2{margin-top:10px;font:600 14px Assistant;color:var(--mut);text-decoration:underline}
 .syncst{font-weight:600}
 .syncst.ok{color:var(--gd)}.syncst.ok::before{content:"● ";color:var(--g)}
