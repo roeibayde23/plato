@@ -2,7 +2,7 @@
    HTML and sw.js are network-first so updates reach installed PWAs.
    Versioned JS/CSS (?v=) are cache-first. Old caches are dropped on activate,
    and open pages are asked to reload once. */
-const APP_VERSION = "6";
+const APP_VERSION = "8";
 const CACHE = "plato-v" + APP_VERSION;
 const V = "?v=" + APP_VERSION;
 
@@ -13,6 +13,8 @@ const LOCAL = [
   "./css/style.css" + V,
   "./js/ingredients.js" + V,
   "./js/store.js" + V,
+  "./js/config.js" + V,
+  "./js/cloud.js" + V,
   "./js/app.js" + V,
   "./fonts/assistant.ttf",
   "./fonts/frank-ruhl-libre.ttf",
@@ -115,6 +117,7 @@ self.addEventListener("fetch", (event) => {
   try { url = new URL(req.url); } catch (_) { return; }
   // Let the browser's SW update check hit the network, never a stale cached sw.js.
   if (isServiceWorkerScript(url)) return;
+  if (url.origin !== self.location.origin) return;   // v8: Supabase API/Storage calls always go straight to the network
   if (isHtmlRequest(req, url)) {
     event.respondWith(networkFirst(req));
     return;

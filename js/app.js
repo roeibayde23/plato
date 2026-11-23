@@ -18,6 +18,8 @@
     clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); }, 2000);
   }
   var ICON = {
+    trash: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>',
+    camera: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
     gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5A4330" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     menu: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5A4330" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
     chevR: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
@@ -53,6 +55,13 @@
   var CAT_LABEL = { protein: "חלבון", carb: "פחמימה", fat: "שומן", vegetable: "ירקות", fruit: "פירות", other: "אחר" };
   var ESTIMATE = { asam_sweet_chili: 1, sweet_corn_canned_usda: 1, rice_paper: 1, whey_protein_powder: 1 };
   var BAD_UNIT = /^(כוס|חצי כוס|רבע כוס|אריזה|גביע|מנה|קערת|קופסה)/;
+  // v7: a sensible starter set per tab before there is any usage history (order = priority)
+  var STARTER = {}; ["egg_whole_raw", "chicken_breast_cooked", "cottage_5_tnuva", "greek_yogurt_0_milko", "madeland_fit_20", "tofu_roei", "white_cheese_5_tnuva", "turkey_breast_cooked", "whey_protein_powder",
+    "rice_white_cooked", "pasta_cooked", "oats_rolled", "rye_bread", "tesco_toast_wheat", "racio_cornies", "pita_white", "potato_boiled", "sweet_potato_baked",
+    "olive_oil", "tahini", "avocado", "peanut_butter", "almonds", "hummus", "walnuts", "butter",
+    "cucumber", "tomato", "salad_veg_mix", "pepper_red", "lettuce_romaine", "carrot", "broccoli_raw", "onion",
+    "banana", "apple", "orange", "strawberries", "dates_medjool", "blueberries", "grapes",
+    "milk_1", "coffee_brewed", "honey", "asam_sweet_chili", "heinz_ketchup", "soy_sauce", "sugar"].forEach(function (id, k) { STARTER[id] = k + 1; });
   var PLURAL = { "כף": "כפות", "כפית": "כפיות", "פרוסה": "פרוסות", "חופן": "חפנים", "יח׳": "יח׳" };
   function cleanUnit(name) { return String(name).replace(/\s*\(.*?\)\s*/g, " ").trim(); }
   function shortUnit(name) {
@@ -116,7 +125,7 @@
   var ui = { fixesOpen: false, fixAdding: false, weekOff: 0, dbCat: "all", dbQ: "" };
 
   // date: the day this meal belongs to (past days from the day view); editId: editing an existing meal; fixed: snapshot items whose ingredient no longer exists
-  function newDraft(meal, o) { o = o || {}; draft = { meal: meal, items: {}, order: [], open: false, tab: "protein", q: "", added: {}, date: o.date || S.dateKey(), editId: o.editId || null, fixed: [] }; }
+  function newDraft(meal, o) { o = o || {}; draft = { meal: meal, items: {}, order: [], open: false, tab: "protein", q: "", added: {}, more: {}, date: o.date || S.dateKey(), editId: o.editId || null, fixed: [] }; }
   function setQty(id, mode, qty) {
     if (qty <= 0) { delete draft.items[id]; draft.order = draft.order.filter(function (x) { return x !== id; }); return; }
     if (!draft.items[id]) draft.order.push(id);
@@ -128,12 +137,15 @@
   // ---------- router ----------
   function route() {
     var h = location.hash || "#/";
+    ui.prevHash = ui.curHash || ""; ui.curHash = h;
     closeSheet();
+    if (h.indexOf("#/login") === 0) { renderLogin(); window.scrollTo(0, 0); fabPlace(); return; }
     if (h.indexOf("#/build") === 0) { if (!draft) newDraft(mealByTime()); renderBuild(); }
     else if (h.indexOf("#/settings") === 0) renderSettings();
     else if (h.indexOf("#/db") === 0) renderDB();
     else if (h.indexOf("#/weekly") === 0) renderWeekly();
     else if (h.indexOf("#/weight") === 0) renderWeight();
+    else if (h.indexOf("#/insights/") === 0 && /^\d{4}-\d\d-\d\d$/.test(h.slice(11))) renderInsights(h.slice(11) > S.dateKey() ? S.dateKey() : h.slice(11));
     else if (h.indexOf("#/day/") === 0 && /^\d{4}-\d\d-\d\d$/.test(h.slice(6))) { applyTheme(); renderDay(h.slice(6) > S.dateKey() ? S.dateKey() : h.slice(6)); }
     else renderHome();
     window.scrollTo(0, 0);
@@ -200,7 +212,7 @@
       '<div class="home">' +
       '<div class="hd"><img src="icons/logo.png" alt=""><b>PLATO</b><span class="date">יום ' + DAYNAME[now.getDay()] + " · " + now.getDate() + " " + MONTHS[now.getMonth()] + '</span><button class="gear" data-act="menu" aria-label="תפריט" title="תפריט" aria-haspopup="true">' + ICON.menu + "</button></div>" +
       homeRings(t, g, cel ? cel.before : null) +
-      '<div class="sec"><b>מה אכלתי היום</b><span>' + (day.meals.length ? n(day.meals.length) + (day.meals.length === 1 ? " ארוחה" : " ארוחות") : "") + "</span></div>" +
+      '<div class="sec"><b>מה אכלתי היום</b><span class="sr">' + (day.meals.length ? n(day.meals.length) + (day.meals.length === 1 ? " ארוחה" : " ארוחות") : "") + insEntry(S.dateKey(now), "home") + "</span></div>" +
       (meals ? '<div class="meals">' + meals + "</div>" : '<div class="empty-card">עוד לא נרשמו ארוחות היום</div>') +
       '<div class="cta"><button class="btn pri" data-act="newmeal">＋ ארוחה חדשה</button></div>' +
       weekMini(g) +
@@ -274,7 +286,7 @@
     document.addEventListener("scroll", function (e) { if (e.target && e.target.id === "list") fabPeekSoon(); }, true);
     setInterval(fabCheck, 60000);
   }
-  function fabPlace() { if (!fab.el) return; fab.el.classList.toggle("lift", (location.hash || "").indexOf("#/build") === 0); }
+  function fabPlace() { if (!fab.el) return; var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
   function fabOut(fresh) {
     var e = fab.el; if (!e) return; clearTimeout(fab.idle);
     e.classList.remove("peek"); e.classList.add("out"); if (fresh) { e.classList.remove("bounce2"); void e.offsetWidth; e.classList.add("bounce2", "new"); }
@@ -293,6 +305,71 @@
   }
   function tipClose(quiet) { var e = fab.el; if (!e) return; clearTimeout(fab.autoClose); e.classList.remove("open"); document.getElementById("tippop").hidden = true; if (!quiet) fab.idle = setTimeout(fabPeek, 1800); else fabPeek(); }
   function fabCheer(msg) { fabOut(true); setTimeout(function () { tipOpen(true, msg); fab.autoClose = setTimeout(function () { tipClose(); }, 4500); }, 900); }
+
+  // ---------- v7: 🧠 daily insights — rule-based daily insights (no server, no AI) ----------
+  function insights(key) {
+    var g = S.goal(), day = S.day(key), t = day.totals, today = key === S.dateKey(), now = new Date();
+    var h = now.getHours() + now.getMinutes() / 60, f = today ? Math.max(0.25, Math.min(1, (h - 7) / 13)) : 1, full = f >= 1;
+    var name = (S.profile().name || "").trim() || "אלוף", good = [], miss = [], focus = [];
+    var meals = day.meals, cnt = meals.length;
+    if (!cnt) return { empty: true, partial: !full, name: name, good: [], miss: [], focus: [] };
+    var rk = t.kcal / Math.max(1, g.kcal * f), rp = t.protein / Math.max(1, g.protein * f), rc = t.carbs / Math.max(1, g.carbs * f), rf = t.fat / Math.max(1, g.fat * f);
+    var pg = function (x) { return n(fmt(x)); };
+    // calories
+    if (rk >= 0.9 && rk <= 1.08) good.push("הקלוריות " + (full ? "בדיוק ביעד" : "בקצב מצוין") + ": " + pg(t.kcal) + " מתוך " + pg(g.kcal));
+    else if (rk > 1.08) { miss.push(full ? "חריגה של " + pg(t.kcal - g.kcal) + " קלוריות מהיעד" : "הקצב קצת מהיר: כבר " + pg(t.kcal) + " קלוריות"); focus.push(full ? "בארוחה הגדולה של מחר — מנה קצת קטנה יותר, ולמדוד שמן וממרחים בכפית" : "להמשך היום: ארוחה קלה עם חלבון וירקות, בלי נשנושים מיותרים"); }
+    else if (rk < 0.8) { if (full) { miss.push("חסרו בערך " + pg(g.kcal - t.kcal) + " קלוריות ליעד"); focus.push("לא לדלג על ארוחות — מעט מדי אוכל מאט את ההתקדמות ומעייף"); } else focus.push("נשארו עוד " + pg(g.kcal - t.kcal) + " קלוריות להיום — מקום לארוחה מסודרת"); }
+    else good.push("הקלוריות קרובות ליעד (" + pg(t.kcal) + ")");
+    // protein
+    if (rp >= 0.9) good.push("חלבון מעולה: " + n(Math.round(t.protein)) + " ג׳" + (full ? " מתוך " + n(g.protein) : "") + " 💪");
+    else if (rp < 0.75) { miss.push((full ? "חסרו " : "עד עכשיו חסרים ") + n(Math.round(g.protein * f - t.protein)) + " ג׳ חלבון"); focus.push("מקור חלבון בכל ארוחה — ביצים, קוטג׳, יוגורט, עוף או טופו"); }
+    else focus.push("עוד קצת חלבון — " + n(Math.round(g.protein * f - t.protein)) + " ג׳ (למשל גביע יוגורט או 2 ביצים)");
+    // vegetables & fruit
+    var veg = 0, fruit = 0; meals.forEach(function (m) { m.items.forEach(function (i) { var c = ING[i.ingId] ? ING[i.ingId].cat : ""; if (c === "vegetable") veg += i.grams || 0; if (c === "fruit") fruit += i.grams || 0; }); });
+    if (veg >= 200) good.push("ירקות: " + n(Math.round(veg)) + " ג׳ 🥗");
+    else if (veg > 0) focus.push("עוד ירקות — היו " + n(Math.round(veg)) + " ג׳, היעד הוא בערך 400 ג׳ ביום");
+    else { (full ? miss : focus).push(full ? "לא היו ירקות " + (today ? "היום" : "ביום הזה") : "עוד לא היו ירקות היום — סלט קטן לארוחה הבאה"); if (full) focus.push("ירק בכל ארוחה — מלפפון, עגבנייה, סלט — נפח גדול, מעט קלוריות"); }
+    if (fruit > 0) good.push("היה פרי 🍎"); else if (full) focus.push("פרי אחד ביום — מתוק טבעי וויטמינים");
+    // fat / carbs
+    if (rf > 1.15) { miss.push("השומן גבוה: " + n(Math.round(t.fat)) + " ג׳ מתוך " + n(g.fat)); focus.push("שמן, טחינה ואגוזים — כף אחת זה כבר 90–120 קלוריות, כדאי למדוד"); }
+    if (rc > 1.2) { miss.push("הרבה פחמימות: " + n(Math.round(t.carbs)) + " ג׳ מתוך " + n(g.carbs)); focus.push("פחות לחם/אורז בצלחת, ולהשלים נפח עם ירקות"); }
+    else if (full && rc < 0.5) { miss.push("מעט פחמימות (" + n(Math.round(t.carbs)) + " ג׳)"); focus.push("פחמימה טובה לפני אימון — שיבולת שועל, אורז או פרי"); }
+    if (rf <= 1.15 && rc <= 1.2 && rf >= 0.6 && rc >= 0.6) good.push("איזון טוב בין פחמימה לשומן");
+    var share = t.kcal > 0 ? t.protein * 4 / t.kcal : 0;
+    if (share >= 0.27) good.push("יחס מצוין: " + n(Math.round(share * 100) + "%") + " מהקלוריות הגיעו מחלבון");
+    // meals: how many, how spread, breakfast, heavy evening
+    var by = {}; meals.forEach(function (m) { by[m.type] = (by[m.type] || 0) + m.totals.kcal; });
+    var big = meals.reduce(function (a, m) { return m.totals.kcal > a ? m.totals.kcal : a; }, 0), bigShare = t.kcal ? big / t.kcal : 0;
+    if (cnt >= 3) good.push(n(cnt) + " ארוחות מפוזרות לאורך היום");
+    else if (full) miss.push(cnt === 1 ? "רק ארוחה אחת נרשמה" : "רק 2 ארוחות נרשמו");
+    if (cnt >= 2 && bigShare > 0.5) { miss.push(n(Math.round(bigShare * 100) + "%") + " מהקלוריות הגיעו בארוחה אחת"); focus.push("לפזר את האוכל טוב יותר — 3–4 ארוחות שוות פחות או יותר"); }
+    if (!by["בוקר"] && (full || h >= 11)) focus.push("ארוחת בוקר עם חלבון — מקלה על כל היום ועל הערב");
+    if (t.kcal > 600 && (by["ערב"] || 0) + (by["נשנוש"] || 0) > t.kcal * 0.5) focus.push("רוב האוכל הגיע בערב — כדאי להקדים חלק לצהריים");
+    if (!good.length) good.push("רשמת את כל מה שאכלת — זה כבר חצי מהדרך");
+    if (!miss.length) miss.push("כמעט כלום — יום מאוזן מאוד 👏");
+    if (!focus.length) focus.push("להמשיך בדיוק ככה");
+    return { partial: !full, name: name, good: good.slice(0, 4), miss: miss.slice(0, 4), focus: focus.filter(function (x, i, a) { return a.indexOf(x) === i; }).slice(0, 3) };
+  }
+  function insHead(x, key) {
+    if (x.empty) return "עוד לא נרשמו ארוחות" + (key === S.dateKey() ? " היום" : " ביום הזה") + ", " + esc(x.name) + ".";
+    if (x.partial) return esc(x.name) + ", זה מה שעולה מהיום עד עכשיו. התמונה המלאה מתבהרת לקראת הערב.";
+    var gN = x.good.length, mN = x.miss[0].indexOf("כמעט כלום") === 0 ? 0 : x.miss.length;
+    return esc(x.name) + ", " + (mN === 0 ? "יום מצוין! כמעט הכל בדיוק במקום." : gN >= mN ? "יום טוב בסך הכל — הנה מה שלמדנו ממנו." : "היו דברים טובים, ויש על מה לעבוד מחר. ככה מתקדמים.");
+  }
+  function insEntry(key, where) {   // v7.2: icon-only 🧠 button (no text label), quiet, same look day and evening
+    var x = insights(key); if (x.empty) return "";
+    return '<button class="brain' + (x.partial ? " sofar" : "") + '" data-go="#/insights/' + key + '" aria-label="מה היה טוב ומה חסר ' + (key === S.dateKey() ? "היום" : "ביום הזה") + '" title="מה היה טוב ומה חסר"><span class="emoji">🧠</span></button>';
+  }
+  function dateHead(key) { var p = key.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]); return "יום " + DAYNAME[d.getDay()] + ", " + d.getDate() + "." + (d.getMonth() + 1); }
+  function renderInsights(key) {
+    var x = insights(key), today = key === S.dateKey();
+    var sec = function (cls, ic, title, arr) { return '<div class="card ins ' + cls + '"><div class="ih"><span class="emoji">' + ic + "</span><b>" + title + "</b></div><ul>" + arr.map(function (l) { return "<li>" + l + "</li>"; }).join("") + "</ul></div>"; };
+    var back = today && (ui.prevHash || "").indexOf("#/day/") !== 0 ? '<button class="back" data-act="home">→ חזרה</button>' : '<button class="back" data-go="#/day/' + key + '">→ ' + dayLabel(key) + "</button>";
+    $app.innerHTML = '<div class="set insp">' + back + "<h1><span class=\"emoji\">🧠</span> " + dateHead(key) + "</h1>" + (x.partial && !x.empty ? '<div class="sofar">⏳ עד עכשיו · מתעדכן לאורך היום</div>' : "") + '<p class="lead">' + insHead(x, key) + "</p>" +
+      (x.empty ? '<div class="empty-card">כשיהיו ארוחות רשומות — יופיע כאן מה היה טוב ומה חסר</div>' :
+        sec("good", "✅", "מה היה טוב", x.good) + sec("miss", "⚠️", "מה חסר", x.miss) + sec("focus", "🎯", "על מה לשים דגש", x.focus)) +
+      '<div class="cta"><button class="btn sec2" data-go="#/day/' + key + '">לפירוט הארוחות</button></div></div>';
+  }
 
   // ---------- day view (from מעקב שבועי): see / edit / add meals on any day ----------
   function dayLabel(key) {
@@ -315,7 +392,7 @@
       '<div class="dnav"><button class="ib" data-go="#/day/' + shiftKey(key, -1) + '" aria-label="יום קודם">' + ICON.chevR + '</button><h1>' + dayLabel(key) + '</h1><button class="ib" data-go="#/day/' + shiftKey(key, 1) + '" aria-label="יום הבא"' + (key >= today ? " disabled" : "") + ">" + ICON.chevL + "</button></div>" +
       '<div class="card dtot"><div class="dk"><b class="n">' + fmt(t.kcal) + "</b><span>מתוך " + n(fmt(g.kcal)) + " קלוריות · " + n(pct + "%") + '</span></div><div class="bar"><i style="width:' + Math.min(100, pct) + "%;background:" + T.kcal + '"></i></div>' +
       '<div class="macs flat">' + macro("חלבון", T.protein, t.protein, g.protein) + macro("פחמימה", T.carbs, t.carbs, g.carbs) + macro("שומן", T.fat, t.fat, g.fat) + "</div></div>" +
-      '<div class="gt">ארוחות</div>' + (groups || '<div class="empty-card">לא נרשמו ארוחות ביום הזה</div>') +
+      '<div class="gt gtb"><span>ארוחות</span>' + insEntry(key, "day") + "</div>" + (groups || '<div class="empty-card">לא נרשמו ארוחות ביום הזה</div>') +
       '<div class="cta"><button class="btn pri" data-act="newmealday" data-key="' + key + '">＋ הוספת ארוחה ' + (key === today ? "להיום" : "ליום הזה") + "</button></div></div>";
   }
 
@@ -382,11 +459,57 @@
     return '<div class="lt"><div class="big"><div><span class="bv kc">' + n(Math.round(v.kcal)) + '</span><span class="bl">קלוריות</span></div><div><span class="bv pr">' + n(r0(v.protein)) + '<small>ג׳</small></span><span class="bl">חלבון</span></div></div>' +
       (on ? '<div class="tiny"><span class="cc">פחמ׳ ' + n(r0(v.carbs)) + '</span> · <span class="fc">שומן ' + n(r0(v.fat)) + " ג׳</span></div>" : "") + "</div>";
   }
+  // v7: dish photos live in IndexedDB (not localStorage: quota). dish.photo = true marks that one exists.
+  var IMG = { db: null, cache: {}, failed: false };
+  function idb(cb) {
+    if (IMG.db) return cb(IMG.db); if (IMG.failed || !window.indexedDB) return cb(null);
+    try {
+      var r = indexedDB.open("plato-img", 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore("dish"); };
+      r.onsuccess = function () { IMG.db = r.result; cb(IMG.db); };
+      r.onerror = r.onblocked = function () { IMG.failed = true; cb(null); };
+    } catch (e) { IMG.failed = true; cb(null); }
+  }
+  function imgPut(id, data, cb) { idb(function (db) { if (!db) return cb(false); try { var tx = db.transaction("dish", "readwrite"); tx.objectStore("dish").put(data, id); tx.oncomplete = function () { IMG.cache[id] = data; cb(true); }; tx.onerror = tx.onabort = function () { cb(false); }; } catch (e) { cb(false); } }); }
+  function imgGet(id, cb) { if (IMG.cache[id]) return cb(IMG.cache[id]); idb(function (db) { if (!db) return cb(null); try { var q = db.transaction("dish").objectStore("dish").get(id); q.onsuccess = function () { if (q.result) IMG.cache[id] = q.result; cb(q.result || null); }; q.onerror = function () { cb(null); }; } catch (e) { cb(null); } }); }
+  function imgDel(id) { delete IMG.cache[id]; idb(function (db) { if (db) try { db.transaction("dish", "readwrite").objectStore("dish").delete(id); } catch (e) {} }); }
+  function hydrate(root) {
+    (root || document).querySelectorAll("[data-dimg]").forEach(function (el) {
+      var id = el.getAttribute("data-dimg");
+      imgGet(id, function (u) { if (u) { el.style.backgroundImage = "url(" + u + ")"; el.classList.add("has"); } else el.classList.add("none"); });
+    });
+  }
+  function thumb(d, cls) { return d.photo ? '<span class="dph ' + (cls || "") + '" data-dimg="' + d.id + '" role="img" aria-label="תמונת המנה"></span>' : '<span class="dph ' + (cls || "") + ' none" aria-hidden="true">🍽️</span>'; }
+  function photoPicker(cur) {
+    return '<div class="phpick"><div class="pv" id="phpv"' + (cur ? ' style="background-image:url(' + cur + ')"' : "") + ">" + (cur ? "" : "<span>🍽️</span>") + "</div>" +
+      '<div class="pb"><label class="btn sm2">' + ICON.camera + ' צילום<input type="file" accept="image/*" capture="environment" id="dishPhoto" hidden></label>' +
+      '<label class="btn sm2">🖼️ מהגלריה<input type="file" accept="image/*" id="dishPhoto2" hidden></label>' +
+      '<button class="lnk" data-act="rmdishphoto"' + (cur ? "" : " hidden") + ">הסרת התמונה</button></div></div>";
+  }
+  function setPend(d) {
+    ui.pendPhoto = d; var pv = document.getElementById("phpv"); if (!pv) return;
+    pv.style.backgroundImage = d ? "url(" + d + ")" : ""; pv.innerHTML = d ? "" : "<span>🍽️</span>";
+    var rb = document.querySelector('[data-act="rmdishphoto"]'); if (rb) rb.hidden = !d;
+  }
+  function savePhoto(id, pend, done) {   // pend: undefined = untouched, null = removed, string = new image
+    if (pend === undefined) return done();
+    if (pend === null) { imgDel(id); if (window.Cloud) Cloud.photoChanged(id, true); S.updateDish(id, { photo: false }); return done(); }
+    imgPut(id, pend, function (ok) { S.updateDish(id, { photo: !!ok, photoAt: Date.now() }); done(); if (!ok) toast("לא הצלחתי לשמור את התמונה במכשיר — המנה נשמרה בלי תמונה"); });
+  }
+  function sheetDish(id) {
+    var d = S.dishes().filter(function (x) { return x.id === id; })[0]; if (!d) return;
+    ui.pendPhoto = undefined; ui.editDish = id;
+    var lines = d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { var s2 = snapshot(i.ingId, i); return '<div class="ln"><span class="q">' + itemQtyLabel(s2) + '</span><span class="nm">' + esc(s2.name) + '</span><span class="kc n">' + fmt(s2.kcal) + "</span></div>"; }).join("");
+    openSheet(head("המנה השמורה", "🔖") + '<div class="sh-body">' + photoPicker(null) +
+      '<div class="frow"><span>שם המנה</span><span class="fld wide"><input id="dishName" type="text" maxlength="40" value="' + esc(d.name) + '"></span></div></div>' +
+      '<div class="items">' + lines + '</div><button class="btn pri" data-act="doeditdish">שמירה</button>');
+    if (d.photo) imgGet(id, function (u) { if (u && ui.pendPhoto === undefined) { setPend(u); ui.pendPhoto = undefined; } });
+  }
   function dishTotals(d) { return tot(d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { return snapshot(i.ingId, i); })); }
   function rowDish(d) {
     var v = dishTotals(d), a = draft.added[d.id];
     var sub = d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { var ing = ING[i.ingId]; return (optOf(ing, i.mode) ? r1(i.qty) + " " + unitWord(ing, i.qty, i.mode) : Math.round(i.qty) + " ג׳") + " " + ing.name.split(",")[0]; }).join(" · ");
-    return '<div class="r4 dish off' + (a ? " added" : "") + '"><button class="delx" data-deldish="' + d.id + '" aria-label="מחיקת מנה" title="מחיקת מנה">✕</button><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + (a ? '<span class="ok-t">נוסף לארוחה ×' + n(a) + "</span>" : esc(sub)) + "</span></div>" +
+    return '<div class="r4 dish off' + (a ? " added" : "") + '"><button class="delx" data-deldish="' + d.id + '" aria-label="מחיקת מנה" title="מחיקת מנה">✕</button><button class="dthumb" data-editdish="' + d.id + '" aria-label="עריכת המנה והתמונה">' + thumb(d) + '</button><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + (a ? '<span class="ok-t">נוסף לארוחה ×' + n(a) + "</span>" : esc(sub)) + "</span></div>" +
       big(v, false) + '<button class="addb" data-dish="' + d.id + '" aria-label="הוספת המנה">' + (a ? "✓" : "+") + "</button></div>";
   }
   function listHTML() {
@@ -402,13 +525,21 @@
       var ds = byUse(S.dishes(), function (d) { return "dish:" + d.id; });
       return (ds.length ? ds.map(rowDish).join("") : '<div class="listmsg">אין עדיין מנות שמורות. בונים ארוחה ולוחצים על הסימנייה כדי לשמור.</div>');
     }
-    // learning order: what he picks often/recently floats to the top under "נפוץ אצלך"
+    // v7: only what he uses (★ נפוץ אצלך) is shown; everything else waits behind "עוד רכיבים". Search still covers all.
     var all = ING_LIST.filter(function (i) { return i.cat === draft.tab; });
-    var fav = byUse(all.filter(function (i) { return S.useScore(i.id) > 0; }), function (i) { return i.id; }).slice(0, 6);
-    if (!fav.length) return all.map(rowIng).join("") + addCustomBtn();
-    var favIds = {}; fav.forEach(function (i) { favIds[i.id] = 1; });
-    return '<div class="dv fav">נפוץ אצלך</div>' + fav.map(rowIng).join("") + '<div class="dv">כל ה' + (CAT_LABEL[draft.tab] === "אחר" ? "שאר" : CAT_LABEL[draft.tab]) + "</div>" +
-      all.filter(function (i) { return !favIds[i.id]; }).map(rowIng).join("") + addCustomBtn();
+    var fav = byUse(all.filter(function (i) { return S.useScore(i.id) > 0; }), function (i) { return i.id; }).slice(0, 12);
+    var shown = {}; fav.forEach(function (i) { shown[i.id] = 1; });
+    var starter = [];
+    if (fav.length < 5) starter = all.filter(function (i) { return !shown[i.id] && (i.custom || STARTER[i.id]); }).sort(function (a, b) { return (STARTER[a.id] || 0) - (STARTER[b.id] || 0); }).slice(0, Math.max(0, 8 - fav.length));
+    starter.forEach(function (i) { shown[i.id] = 1; });
+    var picked = all.filter(function (i) { return !shown[i.id] && draft.items[i.id]; });   // already in this meal: never hide
+    picked.forEach(function (i) { shown[i.id] = 1; });
+    var rest = all.filter(function (i) { return !shown[i.id]; }), open = !!(draft.more && draft.more[draft.tab]);
+    var html = (fav.length ? '<div class="dv fav">נפוץ אצלך</div>' + fav.map(rowIng).join("") : "") +
+      (starter.length ? '<div class="dv st">' + (fav.length ? "עוד בסיסיים" : "בסיס מומלץ להתחלה") + "</div>" + starter.map(rowIng).join("") : "") +
+      (picked.length ? '<div class="dv">כבר בארוחה</div>' + picked.map(rowIng).join("") : "");
+    if (rest.length) html += '<button class="more' + (open ? " on" : "") + '" data-act="more" aria-expanded="' + open + '">' + (open ? "הסתרת שאר הרכיבים ▴" : "עוד רכיבים (" + n(rest.length) + ") ▾") + "</button>" + (open ? rest.map(rowIng).join("") : "");
+    return html + addCustomBtn();
   }
   function byUse(arr, keyOf) {   // stable sort by decayed use score (frequency + recency)
     return arr.map(function (x, i) { return { x: x, i: i, s: S.useScore(keyOf(x)) }; }).sort(function (a, b) { return b.s - a.s || a.i - b.i; }).map(function (o) { return o.x; });
@@ -418,9 +549,16 @@
     var items = draftSnap(), t = tot(items), g = S.goal(), dd = S.day(draft.date), day = tot(dd.meals.filter(function (m) { return m.id !== draft.editId; }).map(function (m) { return m.totals; }));
     var isToday = draft.date === S.dateKey();
     var lk = Math.round(g.kcal - day.kcal - t.kcal), lp = Math.round(g.protein - day.protein - t.protein);
-    var rows = items.map(function (i) { return '<div class="ln"><span class="q">' + itemQtyLabel(i) + '</span><span class="nm">' + esc(i.name) + '</span><span class="kc n">' + fmt(i.kcal) + "</span></div>"; }).join("");
+    var rows = draft.fixed.map(function (i, k) { return '<div class="ei fx"><div class="e1"><b class="nm">' + esc(i.name) + '</b><span class="kc n">' + fmt(i.kcal) + '</span><button class="rm" data-rmfix="' + k + '" aria-label="הסרה מהארוחה">' + ICON.trash + '</button></div><div class="e2"><span class="q">' + itemQtyLabel(i) + '</span><small>מרכיב שנמחק מהמאגר · נשמר כמו שהיה</small></div></div>'; }).join("") +
+      draft.order.filter(function (id) { return draft.items[id] && ING[id]; }).map(function (id) {
+        var ing = ING[id], it = draft.items[id], o = optOf(ing, it.mode), v = valsFor(ing, gramsOf(ing, it.mode, it.qty));
+        return '<div class="ei" data-erow="' + id + '"><div class="e1"><b class="nm">' + esc(ing.name) + '</b><span class="kc n">' + fmt(v.kcal) + '</span><button class="rm" data-rm="' + id + '" aria-label="הסרה מהארוחה" title="הסרה">' + ICON.trash + "</button></div>" +
+          '<div class="e2"><div class="stp sm"><button data-es="-1" data-id="' + id + '" aria-label="פחות">−</button><div class="qv"><input type="number" inputmode="decimal" min="0" step="any" value="' + (o ? r1(it.qty) : Math.round(it.qty)) + '" data-eq="' + id + '" aria-label="כמות"><small>' + (o ? unitWord(ing, it.qty, it.mode) : "גרם") + '</small></div><button data-es="1" data-id="' + id + '" aria-label="יותר">+</button></div>' +
+          (ing.opts.length ? '<label class="mode"><select data-em="' + id + '" aria-label="יחידת מידה">' + ing.opts.map(function (x) { return '<option value="' + x.m + '"' + (x.m === it.mode ? " selected" : "") + ">" + esc(x.short) + "</option>"; }).join("") + '<option value="g"' + (it.mode === "g" ? " selected" : "") + ">גרם</option></select></label>" : "") +
+          '<span class="pq">' + n(r0(v.protein)) + " ג׳ חלבון</span></div></div>";
+      }).join("");
     var aft = lk >= 0 ? "אחרי הארוחה: נשארו " + n(fmt(lk)) + " קלוריות ו־" + n(Math.max(0, lp)) + " ג׳ חלבון " + (isToday ? "להיום" : "ליום הזה") : "אחרי הארוחה: חריגה של " + n(fmt(-lk)) + " קלוריות מהיעד";
-    return '<div class="det">' + (rows || '<div class="listmsg" style="padding:6px 0">עוד לא נבחרו מרכיבים</div>') +
+    return '<div class="det">' + (rows ? '<div class="eh">המרכיבים בארוחה · משנים כמות או מוחקים</div>' : "") + (rows || '<div class="listmsg" style="padding:6px 0">עוד לא נבחרו מרכיבים</div>') +
       '<div class="smac"><span class="cc">פחמימה ' + n(Math.round(t.carbs)) + ' ג׳</span> · <span class="fc">שומן ' + n(Math.round(t.fat)) + ' ג׳</span></div><div class="aft' + (lk < 0 ? " over" : "") + '">' + aft + "</div></div>" +
       '<div class="bar"><button class="txt" data-act="toggle" aria-expanded="' + draft.open + '" aria-label="פירוט הארוחה">' + ICON.chevUp +
       '<span class="cnt">' + (items.length ? n(items.length) + (items.length === 1 ? " מרכיב" : " מרכיבים") : "ריק") + '</span><span class="dt">·</span><span class="kk">' + n(fmt(t.kcal)) + ' קלוריות</span><span class="dt">·</span><span class="pr">' + n(Math.round(t.protein)) + " ג׳ חלבון</span></button>" +
@@ -435,16 +573,19 @@
       '<div class="seg" id="seg">' + CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '">' + c[1] + "</button>"; }).join("") + "</div>" +
       '<div class="list" id="list">' + listHTML() + "</div>" +
       '<div class="sum' + (draft.open ? " open" : "") + '" id="sum">' + sumHTML() + "</div></div>";
+    hydrate(document.getElementById("list"));
   }
   function refreshBuild(keepScroll) {
     var l = document.getElementById("list"); var top = l ? l.scrollTop : 0;
     document.getElementById("list").innerHTML = listHTML();
-    var s = document.getElementById("sum"); s.className = "sum" + (draft.open ? " open" : ""); s.innerHTML = sumHTML();
+    var s = document.getElementById("sum"); s.className = "sum" + (draft.open ? " open" : ""); s.innerHTML = sumHTML(); fabPlace();
     document.getElementById("seg").innerHTML = CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '">' + c[1] + "</button>"; }).join("");
     if (keepScroll !== false) document.getElementById("list").scrollTop = top;
+    hydrate(document.getElementById("list"));
   }
   function sheetSaveDish() {
-    openSheet(head("שמירה כמנה", "🔖") + '<div class="sh-body"><div class="frow"><span>שם המנה</span><span class="fld wide"><input id="dishName" type="text" placeholder="למשל: טוסט גבינה" maxlength="40"></span></div></div><button class="btn pri" data-act="dosavedish">שמירה</button>');
+    ui.pendPhoto = undefined;
+    openSheet(head("שמירה כמנה", "🔖") + '<div class="sh-body">' + photoPicker(null) + '<div class="frow"><span>שם המנה</span><span class="fld wide"><input id="dishName" type="text" placeholder="למשל: טוסט גבינה" maxlength="40"></span></div></div><button class="btn pri" data-act="dosavedish">שמירה</button>');
     setTimeout(function () { var i = document.getElementById("dishName"); if (i) i.focus(); }, 50);
   }
   function sheetCustom(defCat) {
@@ -470,7 +611,11 @@
           : (ui.fixAdding ? "" : '<div class="fx emptyfx">אין עדיין פריטים. לוחצים ➕ כדי להוסיף.</div>'));
     }
     var open = fx.filter(function (f) { return !f.done; }).length;
+    var cs = window.Cloud ? Cloud.status() : { on: false };
+    var acct = cs.on ? row("account", "☁️", "", "חשבון", esc(cs.email) + ' · <span id="syncst" class="syncst ' + cs.state + '">' + syncText(cs) + "</span>")
+      : '<button class="srow" data-go="#/login"><span class="tile emoji br">☁️</span><span class="st"><b>התחברות לחשבון</b><small>כרגע הנתונים רק בטלפון הזה · גיבוי וסנכרון בענן</small></span>' + ICON.chevL + "</button>";
     $app.innerHTML = '<div class="set"><button class="back" data-act="home">→ חזרה</button><h1>הגדרות</h1>' +
+      '<div class="gt">חשבון וסנכרון</div><div class="card">' + acct + "</div>" +
       '<div class="gt">אני והיעד שלי</div><div class="card">' + row("profile", prof.photo ? '<img src="' + prof.photo + '" alt="">' : "👤", prof.photo ? "photo" : "", "פרופיל", esc(prof.name) + " · " + n(kg(prof.weight)) + " ק״ג") + row("goal", "🎯", "", "יעדים", n(fmt(gl.kcal)) + " קלוריות · " + n(gl.protein) + " ג׳ חלבון", "עריכה") + "</div>" +
       '<div class="gt">רק לך</div><div class="card fixes"><div class="srow" style="cursor:default"><span class="tile emoji br">🔧</span><span class="st"><b>שיפוצים</b><small>מה לתקן באפליקציה' + (fx.length ? " · " + n(open) + " פתוחים" : "") + "</small></span>" +
       '<button class="ib" data-act="fixadd" aria-label="הוספת פריט" title="הוספה">' + ICON.plus + '</button><button class="ib' + (ui.fixesOpen ? " on" : "") + '" data-act="fixeye" aria-label="הצג או הסתר" title="הצג/הסתר">' + ICON.eye(ui.fixesOpen) + "</button></div>" + list + "</div>" +
@@ -523,8 +668,65 @@
       '<p class="hint calc" id="gCalc"></p></div><button class="btn pri" data-act="savegoal">שמירת היעדים</button><button class="linkbtn" data-act="resetgoal">חזרה להמלצה של אקי (' + n("2,050") + " · " + n(160) + " · " + n(215) + " · " + n(62) + ")</button>", "goals");
     goalCalc();
   }
+  // ---------- v8: account + sync ----------
+  function hhmm(t) { var d = new Date(t); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+  function syncText(cs) {
+    if (cs.state === "offline") return "אין חיבור · יסונכרן אחר כך";
+    if (cs.state === "syncing") return "מסנכרן…";
+    if (cs.state === "error") return "הסנכרון נכשל — ננסה שוב";
+    if (cs.state === "signedout") return "צריך להתחבר מחדש";
+    if (!cs.last) return "עוד לא סונכרן";
+    var d = new Date(cs.last), today = S.dateKey(d) === S.dateKey();
+    return "מסונכרן · " + (today ? "היום " : fmtDate(S.dateKey(d)) + " ") + n(hhmm(cs.last));
+  }
+  function sheetAccount() {
+    var cs = Cloud.status(); if (!cs.on) { closeSheet(); go("#/login"); return; }
+    openSheet(head("חשבון", "☁️") + '<div class="sh-body acct">' +
+      '<div class="frow"><span>אימייל</span><span class="vv" dir="ltr">' + esc(cs.email) + "</span></div>" +
+      '<div class="frow"><span>סנכרון</span><span class="vv"><span id="syncst2" class="syncst ' + cs.state + '">' + syncText(cs) + "</span></span></div>" +
+      '<p class="note">הנתונים נשמרים בטלפון ומסתנכרנים לענן אוטומטית. התנתקות לא מוחקת כלום — לא מהענן ולא מהטלפון.</p></div>' +
+      '<button class="btn sec2" data-act="syncnow">סנכרון עכשיו ↻</button><button class="btn danger" data-act="logout">התנתקות</button>');
+  }
+  function onSyncStatus(cs) {
+    ["syncst", "syncst2"].forEach(function (id) { var e = document.getElementById(id); if (e) { e.className = "syncst " + cs.state; e.innerHTML = syncText(cs); } });
+    var hb = document.getElementById("cloudst"); if (hb) hb.className = "cloudst " + (cs.on ? cs.state : "off");
+  }
+  function onCloudChange() {   // new data arrived from the server
+    loadIngredients();
+    var h = location.hash || "#/";
+    if (h.indexOf("#/build") === 0 || h.indexOf("#/login") === 0 || $sheet.innerHTML) return;   // never yank the screen he is working in
+    route();
+  }
+  function renderLogin() {
+    var t = ui.authTab || "in", conf = ui.authConfirm;
+    var tabs = '<div class="seg auth"><button class="' + (t === "in" ? "on" : "") + '" data-authtab="in">התחברות</button><button class="' + (t === "up" ? "on" : "") + '" data-authtab="up">הרשמה</button></div>';
+    var body = conf ? '<div class="confirm"><div class="big emoji">📬</div><h3>כמעט סיימנו!</h3><p>שלחנו מייל אימות אל<br><b dir="ltr">' + esc(conf) + "</b></p><p>לוחצים על הקישור במייל, ואז חוזרים לכאן ומתחברים עם אותה סיסמה.</p>" +
+        '<button class="btn pri" data-act="authtologin">להתחברות</button><button class="lnk2" data-act="resend">לא הגיע? שליחה חוזרת</button></div>'
+      : tabs + '<form id="authForm" class="aform" action="#" novalidate>' +
+        '<label class="af"><span>אימייל</span><input id="aEmail" type="email" inputmode="email" autocomplete="email" dir="ltr" placeholder="name@example.com" value="' + esc(ui.authEmail || "") + '" required></label>' +
+        '<label class="af"><span>סיסמה</span><span class="pw"><input id="aPw" type="password" autocomplete="' + (t === "up" ? "new-password" : "current-password") + '" dir="ltr" placeholder="' + (t === "up" ? "לפחות 6 תווים" : "••••••") + '" required><button type="button" class="eye" data-act="pweye" aria-label="הצגת סיסמה">' + ICON.eye(false) + "</button></span></label>" +
+        '<div class="aerr" id="aErr" role="alert"></div>' +
+        '<button type="submit" class="btn pri" id="aGo">' + (t === "up" ? "יצירת חשבון" : "התחברות") + "</button></form>" +
+        '<p class="ahint">' + (t === "up" ? "אחרי ההרשמה יגיע מייל אימות קצר. כל מה שכבר רשמת בטלפון יעלה לחשבון." : "יש לך חשבון CASA? אפשר להתחבר עם אותם פרטים.") + "</p>";
+    $app.innerHTML = '<div class="login"><div class="lhead"><img src="icons/logo.png" alt=""><b>PLATO</b><p>שומרים את הנתונים בענן,<br>ממשיכים מכל מכשיר.</p></div>' +
+      '<div class="lcard">' + body + "</div>" +
+      (conf ? "" : '<button class="skip" data-act="skiplogin">המשך בלי חשבון ←</button><p class="lfoot">אפשר להתחבר מאוחר יותר מההגדרות. בלי חשבון הנתונים נשמרים רק בטלפון הזה.</p>') + "</div>";
+  }
+  function authBusy(on, msg) { var b = document.getElementById("aGo"); if (b) { b.disabled = on; if (msg) b.textContent = msg; } }
+  function authErr(m) { var e = document.getElementById("aErr"); if (e) e.textContent = m || ""; }
+  function doAuth() {
+    var em = (document.getElementById("aEmail").value || "").trim(), pw = document.getElementById("aPw").value || "", up = ui.authTab === "up";
+    ui.authEmail = em;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return authErr("כתובת האימייל לא נראית תקינה");
+    if (pw.length < 6) return authErr("הסיסמה צריכה לפחות 6 תווים");
+    authErr(""); authBusy(true, up ? "יוצר חשבון…" : "מתחבר…");
+    (up ? Cloud.signUp(em, pw) : Cloud.signIn(em, pw).then(function () { return { confirm: false }; })).then(function (r) {
+      if (r.confirm) { ui.authConfirm = em; renderLogin(); return; }
+      loadIngredients(); ui.authConfirm = null; go("#/"); toast("מחובר · הנתונים מסונכרנים ☁️");
+    }).catch(function (e) { authBusy(false, up ? "יצירת חשבון" : "התחברות"); authErr(e.message || "לא הצלחתי להתחבר"); });
+  }
   function sheetApp() {
-    openSheet(head("אפליקציה", "📱") + '<div class="sh-body"><div class="frow"><span>גרסה</span><span class="vv">' + n("v" + APP_VERSION) + '</span></div><div class="frow"><span>הנתונים</span><span class="vv">נשמרים בטלפון הזה</span></div></div>' +
+    openSheet(head("אפליקציה", "📱") + '<div class="sh-body"><div class="frow"><span>גרסה</span><span class="vv">' + n("v" + APP_VERSION) + '</span></div><div class="frow"><span>הנתונים</span><span class="vv">' + (window.Cloud && Cloud.session() ? "בטלפון + בענן" : "נשמרים בטלפון הזה") + '</span></div></div>' +
       '<button class="btn pri" data-act="export">ייצוא גיבוי (JSON)</button><button class="btn sec2" data-act="import">שחזור מגיבוי</button><input id="importFile" type="file" accept="application/json,.json" hidden>');
   }
 
@@ -706,6 +908,7 @@
         case "startbuild": var s = document.querySelector(".mo.sel"); newDraft(s ? s.getAttribute("data-pick") : mealByTime(), { date: ui.nmDate || S.dateKey() }); closeSheet(); go("#/build"); return;
         case "cancel": var back = draft && draft.date !== S.dateKey() ? "#/day/" + draft.date : (draft && draft.editId ? "#/" : "#/"); draft = null; go(back); return;
         case "toggle": draft.open = !draft.open; refreshBuild(); return;
+        case "more": draft.more[draft.tab] = !draft.more[draft.tab]; refreshBuild(); return;
         case "clearq": draft.q = ""; renderBuild(); return;
         case "custom": sheetCustom(draft && location.hash.indexOf("#/build") === 0 ? draft.tab : ui.dbCat); return;
         case "addday":
@@ -720,8 +923,12 @@
         case "savedish": if (!draftSnap().length) return; sheetSaveDish(); return;
         case "dosavedish":
           var nm = (document.getElementById("dishName").value || "").trim(); if (!nm) { toast("צריך שם למנה"); return; }
-          S.addDish(nm, draft.order.filter(function (id) { return draft.items[id]; }).map(function (id) { return { ingId: id, mode: draft.items[id].mode, qty: draft.items[id].qty }; }));
-          closeSheet(); refreshBuild(); toast("נשמר בשמורות: " + nm); return;
+          var nd = S.addDish(nm, draft.order.filter(function (id) { return draft.items[id]; }).map(function (id) { return { ingId: id, mode: draft.items[id].mode, qty: draft.items[id].qty }; }));
+          savePhoto(nd.id, ui.pendPhoto || undefined, function () { closeSheet(); refreshBuild(); toast("נשמר בשמורות: " + nm); }); return;
+        case "doeditdish":
+          var en = (document.getElementById("dishName").value || "").trim(); if (!en) { toast("צריך שם למנה"); return; }
+          S.updateDish(ui.editDish, { name: en }); savePhoto(ui.editDish, ui.pendPhoto, function () { closeSheet(); if (draft) refreshBuild(); toast("המנה עודכנה"); }); return;
+        case "rmdishphoto": setPend(null); return;
         case "docustom":
           var cn = (document.getElementById("cName").value || "").trim(); var num = function (id) { return parseFloat(document.getElementById(id).value); };
           var k = num("cK"); if (!cn || !(k >= 0)) { toast("צריך שם וקלוריות ל־100 ג׳"); return; }
@@ -767,15 +974,22 @@
           aEl.href = u; aEl.download = "plato-backup-" + S.dateKey() + ".json"; document.body.appendChild(aEl); aEl.click(); aEl.remove(); setTimeout(function () { URL.revokeObjectURL(u); }, 1000); toast("הגיבוי ירד לקבצים"); return;
         case "import": document.getElementById("importFile").click(); return;
         case "photo": document.getElementById("photoFile").click(); return;
+        case "skiplogin": Cloud.chooseLocal(); go("#/"); return;
+        case "authtologin": ui.authTab = "in"; ui.authConfirm = null; renderLogin(); return;
+        case "resend": Cloud.resend(ui.authConfirm).then(function () { toast("שלחנו שוב ✉️"); }).catch(function (e) { toast(e.message); }); return;
+        case "pweye": var pi = document.getElementById("aPw"); pi.type = pi.type === "password" ? "text" : "password"; el.innerHTML = ICON.eye(pi.type === "text"); return;
+        case "syncnow": Cloud.syncNow().then(function () { var c2 = Cloud.status(); toast(c2.state === "ok" ? "מסונכרן ✓" : syncText(c2)); }); return;
+        case "logout": if (!arm(el, "logout")) return; Cloud.signOut().then(function () { closeSheet(); renderSettings(); toast("התנתקת · הנתונים נשארו שמורים"); }); return;
         case "rmphoto": setPhoto(null); toast("התמונה הוסרה"); return;
       }
     }
+    if ((el = t.closest("[data-authtab]"))) { ui.authTab = el.getAttribute("data-authtab"); var ae = document.getElementById("aEmail"); if (ae) ui.authEmail = ae.value; renderLogin(); return; }
     if ((el = t.closest("[data-pick]"))) {
       document.querySelectorAll(".mo").forEach(function (m) { m.classList.toggle("sel", m === el); m.setAttribute("aria-pressed", m === el); });
       document.getElementById("goName").textContent = el.getAttribute("data-pick"); return;
     }
     if ((el = t.closest("[data-meal]"))) { sheetMeal(el.getAttribute("data-meal"), el.getAttribute("data-key")); return; }
-    if ((el = t.closest("[data-open]"))) { var o = el.getAttribute("data-open"); if (o === "profile") sheetProfile(); else if (o === "goal") sheetGoal(); else sheetApp(); return; }
+    if ((el = t.closest("[data-open]"))) { var o = el.getAttribute("data-open"); if (o === "profile") sheetProfile(); else if (o === "goal") sheetGoal(); else if (o === "account") sheetAccount(); else sheetApp(); return; }
     if ((el = t.closest("[data-gstep]"))) { var gi = document.getElementById(el.getAttribute("data-g")); gi.value = Math.max(0, (parseFloat(gi.value) || 0) + parseFloat(el.getAttribute("data-gstep"))); goalCalc(); return; }
     if ((el = t.closest("[data-go]"))) { closeSheet(); go(el.getAttribute("data-go")); return; }
     if ((el = t.closest("[data-dbcat]"))) { ui.dbCat = el.getAttribute("data-dbcat"); refreshDB(); return; }
@@ -786,9 +1000,12 @@
     if (!draft) return;
     if ((el = t.closest("[data-tab]"))) { draft.tab = el.getAttribute("data-tab"); draft.q = ""; var qi = document.getElementById("q"); if (qi) qi.value = ""; renderBuild(); return; }
     if ((el = t.closest("[data-add]"))) { var ing = ING[el.getAttribute("data-add")]; setQty(ing.id, ing.defMode, ing.defMode === "u" ? 1 : 100); refreshBuild(); return; }
-    if ((el = t.closest("[data-step]"))) {
+    if ((el = t.closest("[data-rm]"))) { setQty(el.getAttribute("data-rm"), "g", 0); refreshBuild(); toast("הוסר מהארוחה"); return; }
+    if ((el = t.closest("[data-rmfix]"))) { draft.fixed.splice(+el.getAttribute("data-rmfix"), 1); refreshBuild(); toast("הוסר מהארוחה"); return; }
+    if ((el = t.closest("[data-editdish]"))) { sheetDish(el.getAttribute("data-editdish")); return; }
+    if ((el = t.closest("[data-step],[data-es]"))) {
       var id = el.getAttribute("data-id"), it = draft.items[id]; if (!it) return;
-      var stp = it.mode !== "g" ? 1 : 25, d = parseInt(el.getAttribute("data-step"), 10);
+      var stp = it.mode !== "g" ? 1 : 25, d = parseInt(el.getAttribute("data-step") || el.getAttribute("data-es"), 10);
       var nq = d > 0 ? (Math.floor(it.qty / stp + 1e-9) + 1) * stp : (Math.ceil(it.qty / stp - 1e-9) - 1) * stp;
       setQty(id, it.mode, Math.max(0, Math.round(nq * 100) / 100)); refreshBuild(); return;
     }
@@ -802,7 +1019,7 @@
       });
       draft.added[dish.id] = (draft.added[dish.id] || 0) + 1; refreshBuild(); return;
     }
-    if ((el = t.closest("[data-deldish]"))) { if (!arm(el, "dish" + el.getAttribute("data-deldish"))) return; S.deleteDish(el.getAttribute("data-deldish")); refreshBuild(); toast("המנה נמחקה"); return; }
+    if ((el = t.closest("[data-deldish]"))) { if (!arm(el, "dish" + el.getAttribute("data-deldish"))) return; imgDel(el.getAttribute("data-deldish")); if (window.Cloud) Cloud.photoChanged(el.getAttribute("data-deldish"), true); S.deleteDish(el.getAttribute("data-deldish")); refreshBuild(); toast("המנה נמחקה"); return; }
   });
 
   document.addEventListener("input", function (ev) {
@@ -811,21 +1028,25 @@
     if (ev.target.id === "q" && draft) {
       draft.q = ev.target.value;
       var cb = document.querySelector(".search .clr"); if (cb) cb.hidden = !draft.q;
-      document.getElementById("list").innerHTML = listHTML(); document.getElementById("list").scrollTop = 0;
+      document.getElementById("list").innerHTML = listHTML(); document.getElementById("list").scrollTop = 0; hydrate(document.getElementById("list"));
       document.getElementById("seg").innerHTML = CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '">' + c[1] + "</button>"; }).join("");
     }
   });
   document.addEventListener("change", function (ev) {
     var t = ev.target;
-    if (t.hasAttribute && t.hasAttribute("data-modesel") && draft) {   // כף / כפית / גרם … keep the same amount, convert the number
-      var mid = t.getAttribute("data-modesel"), mi = draft.items[mid], ing2 = ING[mid], nm2 = t.value; if (!mi) return;
+    if (t.hasAttribute && (t.hasAttribute("data-modesel") || t.hasAttribute("data-em")) && draft) {   // כף / כפית / גרם … keep the same amount, convert the number
+      var mid = t.getAttribute("data-modesel") || t.getAttribute("data-em"), mi = draft.items[mid], ing2 = ING[mid], nm2 = t.value; if (!mi) return;
       var gr = gramsOf(ing2, mi.mode, mi.qty), no = optOf(ing2, nm2);
       setQty(mid, nm2, no ? Math.max(0.5, Math.round(gr / no.grams * 2) / 2) : Math.max(1, Math.round(gr)));
       refreshBuild(); return;
     }
-    if (t.hasAttribute && t.hasAttribute("data-qty") && draft) {
-      var id = t.getAttribute("data-qty"), it = draft.items[id]; var v = parseFloat(t.value);
+    if (t.hasAttribute && (t.hasAttribute("data-qty") || t.hasAttribute("data-eq")) && draft) {
+      var id = t.getAttribute("data-qty") || t.getAttribute("data-eq"), it = draft.items[id]; var v = parseFloat(t.value);
       setQty(id, it ? it.mode : ING[id].defMode, isFinite(v) ? Math.max(0, v) : 0); refreshBuild(); return;
+    }
+    if ((t.id === "dishPhoto" || t.id === "dishPhoto2") && t.files && t.files[0]) {
+      resizeImage(t.files[0], 360, function (d) { if (d) setPend(d); else toast("לא הצלחתי לקרוא את התמונה"); });
+      t.value = ""; return;
     }
     if (t.id === "photoFile" && t.files && t.files[0]) {
       resizeImage(t.files[0], 256, function (d) { if (d) { setPhoto(d); toast("התמונה עודכנה"); } else toast("לא הצלחתי לקרוא את התמונה"); });
@@ -844,7 +1065,7 @@
     if (t.id === "wNew") { ev.preventDefault(); document.querySelector('[data-act="addweight"]').click(); return; }
     if (t.id === "dbq") t.blur();
     if (t.id === "dishName") { document.querySelector('[data-act="dosavedish"]').click(); return; }
-    if (t.hasAttribute && t.hasAttribute("data-qty")) t.blur();
+    if (t.hasAttribute && (t.hasAttribute("data-qty") || t.hasAttribute("data-eq"))) t.blur();
     if (t.id === "q") t.blur();
   });
 
@@ -857,6 +1078,7 @@
     S.addFix(v); i.value = ""; return true;
   }
   document.addEventListener("submit", function (ev) {
+    if (ev.target.id === "authForm") { ev.preventDefault(); doAuth(); return; }
     if (ev.target.id !== "fixForm") return;
     ev.preventDefault();
     var ok = commitFix(); ui.fixesOpen = true; ui.fixAdding = true; renderSettings();
@@ -887,5 +1109,10 @@
   S.load(); loadIngredients();
   applyTheme(); fabInit();
   if (location.hash.indexOf("#/build") === 0) location.hash = "#/";
+  if (window.Cloud && Cloud.enabled()) {
+    Cloud.init({ imgGet: imgGet, imgPut: imgPut, onChange: onCloudChange, onStatus: onSyncStatus });
+    if (Cloud._landing) Cloud._landing.then(function () { route(); toast("המייל אושר · מחובר ☁️"); });
+    else if (!Cloud.mode() && !/access_token=/.test(location.hash)) location.hash = "#/login";
+  }
   route();
 })();

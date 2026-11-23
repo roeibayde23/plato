@@ -11,6 +11,9 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
     python3 test/e2e.py http://127.0.0.1:8781/
     python3 test/fixes_ios.py http://127.0.0.1:8781/   # WebKit / iPhone 13 regression test for שיפוצים (needs: python3 -m playwright install webkit)
     python3 test/v5.py http://127.0.0.1:8781/          # v5 features: tips, goals, teaspoon, save effect, DB edit, day view
+    python3 test/v7.py http://127.0.0.1:8781/          # v7: edit items while building, מסקנות מהיום, frequent-only list, dish photos (+ WebKit)
+    python3 test/v8.py http://127.0.0.1:8781/          # v8: login/sign-up, merge + sync with a mocked Supabase (no network)
+    PLATO_E2E_FILE=creds.json python3 test/v8_real.py  # v8: real Supabase e2e with a throwaway, pre-confirmed account (delete it afterwards)
 Screenshots go to `shots/`.
 
 ## Files

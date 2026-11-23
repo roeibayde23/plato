@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   var KEY = "plato-v1";
-  var SCHEMA = 3;
+  var SCHEMA = 4;   // v8: per-record stamps (u), tombstones (deleted) and section stamps for cloud merge
   var DB = window.PLATO_DB || { daily_target: {}, ingredients: [] };
   var T = DB.daily_target || {};
 
@@ -33,6 +33,8 @@
       weights: [],         // weight history: {id,date:"YYYY-MM-DD",kg,at} (one per day, sorted by date)
       overrides: {},       // v3: edits to built-in (Aki) ingredients: id -> {userId, per_100g, unit, updatedAt}
       prefs: { homeVariant: "B", tip: { date: "", hidden: false, rot: 0 } },
+      stamps: {},          // v8: section -> ms of last change (profile, goal, prefs)
+      deleted: {},         // v8: tombstones "kind:id" -> ms, so a delete on one device wins over an older copy elsewhere
       usage: {},           // learning order: key (ingredient id or "dish:"+id) -> {n: decayed count, last: ms}
       updatedAt: Date.now()
     };
@@ -52,11 +54,49 @@
     for (var k in d) if (s[k] === undefined) s[k] = d[k];
     // v2: start the weight history from the profile weight he already entered
     if (!s.weights.length && s.profile && s.profile.weight > 0) s.weights.push({ id: uid(), date: dateKey(new Date(s.updatedAt || Date.now())), kg: s.profile.weight, at: s.updatedAt || Date.now() });
+    if (!s.stamps) s.stamps = {}; if (!s.deleted) s.deleted = {};
     s.schema = SCHEMA;
     return s;
   }
   function load() { state = migrate(adapter.read()); return state; }
-  function save() { state.updatedAt = Date.now(); adapter.write(state); }
+  var listeners = [], quiet = 0;
+  function save() { state.updatedAt = Date.now(); adapter.write(state); if (!quiet) listeners.forEach(function (f) { try { f(); } catch (e) {} }); }
+  function now() { return Date.now(); }
+  function stamp(sec) { st().stamps[sec] = now(); }
+  function tomb(kind, id) { st().deleted[kind + ":" + id] = now(); }
+  function recT(r) { return r ? (r.u || r.editedAt || r.updatedAt || r.at || r.createdAt || 0) : 0; }
+  // ---- v8 merge: union by id, newest record wins, tombstones newer than a record delete it ----
+  function mergeList(a, b, kind, keyOf, dead) {
+    var m = {}, order = [];
+    (a || []).concat(b || []).forEach(function (r) { var k = keyOf(r); if (!(k in m)) order.push(k); if (!(k in m) || recT(r) > recT(m[k])) m[k] = r; });
+    return order.filter(function (k) { var t = dead[kind + ":" + k]; return !(t && t >= recT(m[k])); }).map(function (k) { return m[k]; });
+  }
+  function merge(L, R) {
+    if (!R || typeof R !== "object" || !R.days) return L;
+    R = migrate(clone(R));
+    var out = clone(L), dead = {};
+    [L.deleted || {}, R.deleted || {}].forEach(function (d) { for (var k in d) if (!(dead[k] >= d[k])) dead[k] = d[k]; });
+    out.deleted = dead;
+    var meals = function (S) { var a = []; for (var k in S.days) S.days[k].meals.forEach(function (m) { a.push(Object.assign({}, m, { _day: k })); }); return a; };
+    out.days = {};
+    mergeList(meals(L), meals(R), "meal", function (m) { return m.id; }, dead).forEach(function (m) { var k = m._day; delete m._day; (out.days[k] = out.days[k] || { meals: [] }).meals.push(m); });
+    for (var dk in out.days) out.days[dk].meals.sort(function (x, y) { return x.createdAt - y.createdAt; });
+    out.dishes = mergeList(L.dishes, R.dishes, "dish", function (d) { return d.id; }, dead);
+    out.customIngredients = mergeList(L.customIngredients, R.customIngredients, "custom", function (c) { return c.id; }, dead);
+    out.fixes = mergeList(L.fixes, R.fixes, "fix", function (f) { return f.id; }, dead).sort(function (x, y) { return y.createdAt - x.createdAt; });
+    out.weights = mergeList(L.weights, R.weights, "weight", function (w) { return w.date; }, dead);
+    var ov = {}; [L.overrides, R.overrides].forEach(function (o) { for (var k in o) if (!ov[k] || recT(o[k]) > recT(ov[k])) ov[k] = o[k]; });
+    for (var ok in ov) { var t = dead["ov:" + ok]; if (t && t >= recT(ov[ok])) delete ov[ok]; } out.overrides = ov;
+    var us = {}; [L.usage, R.usage].forEach(function (o) { for (var k in o) if (!us[k] || o[k].last > us[k].last) us[k] = o[k]; }); out.usage = us;
+    out.stamps = {};
+    ["profile", "goal", "prefs"].forEach(function (sec) {
+      var lt = (L.stamps || {})[sec] || 0, rt = (R.stamps || {})[sec] || 0;
+      out[sec] = rt > lt ? clone(R[sec]) : clone(L[sec]); out.stamps[sec] = Math.max(lt, rt);
+    });
+    if (!((L.stamps || {}).profile) && !((R.stamps || {}).profile) && !L.profile.photo && R.profile && R.profile.photo) out.profile.photo = R.profile.photo;
+    out.userId = L.userId;
+    return out;
+  }
   function st() { return state || load(); }
   function clone(x) { return JSON.parse(JSON.stringify(x)); }
 
@@ -82,9 +122,9 @@
     userId: function () { return st().userId; },
 
     profile: function () { return clone(st().profile); },
-    setProfile: function (p) { Object.assign(st().profile, p); save(); },
+    setProfile: function (p) { Object.assign(st().profile, p); stamp("profile"); save(); },
     goal: function () { return clone(st().goal); },
-    setGoal: function (g) { Object.assign(st().goal, g); save(); },
+    setGoal: function (g) { Object.assign(st().goal, g); stamp("goal"); save(); },
 
     day: function (key) {
       var d = st().days[key || dateKey()];
@@ -94,40 +134,41 @@
     addMeal: function (key, meal) {
       var s = st(); key = key || dateKey();
       if (!s.days[key]) s.days[key] = { meals: [] };
-      var m = { id: uid(), userId: s.userId, type: meal.type, createdAt: Date.now(), items: meal.items, totals: sumTotals(meal.items) };
+      var m = { id: uid(), userId: s.userId, type: meal.type, createdAt: Date.now(), u: Date.now(), items: meal.items, totals: sumTotals(meal.items) };
       s.days[key].meals.push(m); save(); return clone(m);
     },
     updateMeal: function (key, id, meal) {
       var d = st().days[key]; if (!d) return null;
       var m = d.meals.filter(function (x) { return x.id === id; })[0]; if (!m) return null;
-      m.type = meal.type || m.type; m.items = meal.items; m.totals = sumTotals(meal.items); m.editedAt = Date.now();
+      m.type = meal.type || m.type; m.items = meal.items; m.totals = sumTotals(meal.items); m.editedAt = Date.now(); m.u = m.editedAt;
       save(); return clone(m);
     },
     deleteMeal: function (key, id) {
       var d = st().days[key]; if (!d) return;
-      d.meals = d.meals.filter(function (m) { return m.id !== id; });
+      d.meals = d.meals.filter(function (m) { return m.id !== id; }); tomb("meal", id);
       if (!d.meals.length) delete st().days[key];
       save();
     },
 
     dishes: function () { return clone(st().dishes); },
-    addDish: function (name, items) { var d = { id: uid(), userId: st().userId, name: name, items: items }; st().dishes.push(d); save(); return clone(d); },
-    deleteDish: function (id) { st().dishes = st().dishes.filter(function (d) { return d.id !== id; }); save(); },
+    addDish: function (name, items) { var d = { id: uid(), userId: st().userId, name: name, items: items, u: now() }; st().dishes.push(d); save(); return clone(d); },
+    updateDish: function (id, patch) { var d = st().dishes.filter(function (x) { return x.id === id; })[0]; if (!d) return null; Object.assign(d, patch); d.u = now(); save(); return clone(d); },
+    deleteDish: function (id) { st().dishes = st().dishes.filter(function (d) { return d.id !== id; }); tomb("dish", id); save(); },
 
     customs: function () { return clone(st().customIngredients); },
-    addCustom: function (c) { c.id = "custom_" + uid(); c.userId = st().userId; st().customIngredients.push(c); save(); return clone(c); },
-    updateCustom: function (id, patch) { st().customIngredients.forEach(function (c) { if (c.id === id) Object.assign(c, patch); }); save(); },
+    addCustom: function (c) { c.id = "custom_" + uid(); c.userId = st().userId; c.u = now(); st().customIngredients.push(c); save(); return clone(c); },
+    updateCustom: function (id, patch) { st().customIngredients.forEach(function (c) { if (c.id === id) { Object.assign(c, patch); c.u = now(); } }); save(); },
     overrides: function () { return clone(st().overrides); },
     setOverride: function (id, o) { o.userId = st().userId; o.updatedAt = Date.now(); st().overrides[id] = o; save(); },
-    resetOverride: function (id) { delete st().overrides[id]; save(); },
+    resetOverride: function (id) { delete st().overrides[id]; tomb("ov", id); save(); },
     prefs: function () { return clone(st().prefs); },
-    setPrefs: function (p) { Object.assign(st().prefs, p); save(); },
-    deleteCustom: function (id) { st().customIngredients = st().customIngredients.filter(function (c) { return c.id !== id; }); save(); },
+    setPrefs: function (p) { Object.assign(st().prefs, p); stamp("prefs"); save(); },
+    deleteCustom: function (id) { st().customIngredients = st().customIngredients.filter(function (c) { return c.id !== id; }); tomb("custom", id); save(); },
 
     fixes: function () { return clone(st().fixes); },
-    addFix: function (text) { st().fixes.unshift({ id: uid(), text: text, done: false, createdAt: Date.now() }); save(); },
-    toggleFix: function (id) { st().fixes.forEach(function (f) { if (f.id === id) f.done = !f.done; }); save(); },
-    deleteFix: function (id) { st().fixes = st().fixes.filter(function (f) { return f.id !== id; }); save(); },
+    addFix: function (text) { st().fixes.unshift({ id: uid(), text: text, done: false, createdAt: Date.now(), u: now() }); save(); },
+    toggleFix: function (id) { st().fixes.forEach(function (f) { if (f.id === id) { f.done = !f.done; f.u = now(); } }); save(); },
+    deleteFix: function (id) { st().fixes = st().fixes.filter(function (f) { return f.id !== id; }); tomb("fix", id); save(); },
 
     // weight history; profile.weight always mirrors the latest entry
     weights: function () { return clone(st().weights).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.at - b.at; }); },
@@ -137,7 +178,7 @@
       if (ex) { ex.kg = kg; ex.at = Date.now(); } else s.weights.push({ id: uid(), date: date, kg: kg, at: Date.now() });
       syncWeight(); save();
     },
-    deleteWeight: function (id) { st().weights = st().weights.filter(function (w) { return w.id !== id; }); syncWeight(); save(); },
+    deleteWeight: function (id) { st().weights = st().weights.filter(function (w) { if (w.id === id) tomb("weight", w.date); return w.id !== id; }); syncWeight(); save(); },
 
     // learning order: decayed use count (half-life 30 days) so frequent AND recent items rise
     recordUse: function (keys) {
@@ -147,6 +188,13 @@
     },
     useScore: function (key) { var e = st().usage[key]; return e ? decay(e, Date.now()) : 0; },
 
+    // ---- v8 cloud sync hooks ----
+    onSave: function (f) { listeners.push(f); },
+    raw: function () { return clone(st()); },
+    merge: merge,
+    // replace local state with a merged document without firing onSave (the sync engine pushes it itself)
+    applyMerged: function (doc, owner) { quiet++; try { var s = migrate(clone(doc)); if (owner) { s.userId = owner; s.owner = owner; } state = s; syncWeight(); save(); } finally { quiet--; } },
+    owner: function () { return st().owner || null; },
     exportJSON: function () { return JSON.stringify({ app: "PLATO", exportedAt: new Date().toISOString(), data: st() }, null, 2); },
     importJSON: function (text) {
       var o = JSON.parse(text);
