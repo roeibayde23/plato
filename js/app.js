@@ -604,6 +604,33 @@
       '<div class="items">' + lines + '</div><button class="btn pri" data-act="doeditdish">שמירה</button>');
     if (d.photo) imgGet(id, function (u) { if (u && ui.pendPhoto === undefined) { setPend(u); ui.pendPhoto = undefined; } });
   }
+  // v12: saved-dish detail (builder ★): photo, ingredients with amounts, per-serving kcal + macros, quantity, "הוספה לארוחה", ✏️ / 🗑
+  function addDishToDraft(dish, mult) {
+    dish.items.forEach(function (i) {
+      if (!ING[i.ingId]) return; var cur = draft.items[i.ingId], q = i.qty * mult;
+      if (!cur) setQty(i.ingId, i.mode, q);
+      else if (cur.mode === i.mode) setQty(i.ingId, i.mode, cur.qty + q);
+      else { var g = gramsOf(ING[i.ingId], cur.mode, cur.qty) + gramsOf(ING[i.ingId], i.mode, q); setQty(i.ingId, "g", Math.round(g)); }
+    });
+    draft.added[dish.id] = (draft.added[dish.id] || 0) + mult;
+  }
+  function dvBtn(d) { var q = ui.dvQty || 1, k = Math.round(dishTotals(d).kcal * q); return "<span>הוספה לארוחה" + (q !== 1 ? " · " + n(String(q).replace(".5", "½").replace(/^0½$/, "½")) + " מנות" : "") + ' · <span class="n">' + fmt(k) + "</span> קק״ל</span>"; }
+  function sheetDishView(id) {
+    var d = S.dishes().filter(function (x) { return x.id === id; })[0]; if (!d || !draft) return;
+    ui.dvDish = id; ui.dvQty = 1;
+    var v = dishTotals(d), a = draft.added[id];
+    var lines = d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { var s2 = snapshot(i.ingId, i); return '<div class="ln"><span class="q">' + itemQtyLabel(s2) + '</span><span class="nm">' + esc(s2.name) + '</span><span class="kc n">' + fmt(s2.kcal) + "</span></div>"; }).join("");
+    var mc = function (cls, l, val, u) { return '<div class="dvm ' + cls + '"><b class="n">' + val + "<small>" + u + "</small></b><span>" + l + "</span></div>"; };
+    openSheet('<div class="dview">' + head(esc(d.name), "★") +
+      (d.photo ? '<div class="dvph" data-dimg="' + d.id + '" role="img" aria-label="תמונת המנה"></div>' : "") +
+      '<div class="dvtot"><span class="dvlbl">למנה</span>' + mc("mk", "קלוריות", fmt(v.kcal), "") + mc("mp", "חלבון", r0(v.protein), "ג׳") + mc("mc", "פחמימה", r0(v.carbs), "ג׳") + mc("mf", "שומן", r0(v.fat), "ג׳") + "</div>" +
+      '<div class="items dvitems">' + lines + "</div>" +
+      (a ? '<div class="dvin">✓ כבר בארוחה ×' + n(a) + "</div>" : "") +
+      '<div class="dvrow"><div class="dvq" role="group" aria-label="כמות מנות"><button data-act="dvq" data-d="-0.5" aria-label="פחות">−</button><b id="dvqn" class="n">1</b><button data-act="dvq" data-d="0.5" aria-label="יותר">+</button></div>' +
+      '<button class="btn pri dvadd" data-act="dvadd">' + dvBtn(d) + "</button></div>" +
+      '<div class="dvacts"><button class="lnk" data-act="dvedit">' + ICON.pencil + ' עריכה</button><button class="lnk del" data-act="dvdel">' + ICON.trash + " מחיקה</button></div></div>");
+    hydrate($sheet);
+  }
   function dishTotals(d) { return tot(d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { return snapshot(i.ingId, i); })); }
   // v10: delete a saved dish right away, offer "ביטול" for 5 s; the photo is only dropped (locally + cloud) once the undo window closes
   var pendDel = null;
@@ -616,11 +643,11 @@
     toast._done = commitDel;
     toast("המנה נמחקה · " + d.name, "ביטול", function () { var p = pendDel; pendDel = null; toast._done = null; if (!p) return; S.restoreDish(p.d); if (draft && document.getElementById("list")) refreshBuild(); toast("המנה חזרה ★"); }, 5000);
   }
-  function rowDish(d) {   // v10: tap the row = add to the meal · ✏️ = edit (name/photo) · 🗑 or swipe left = delete (with undo)
+  function rowDish(d) {   // v12: tap the row = detail sheet (add from there) · ✏️ = edit (name/photo) · 🗑 or swipe left = delete (with undo)
     var v = dishTotals(d), a = draft.added[d.id];
     var sub = d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { var ing = ING[i.ingId]; return (optOf(ing, i.mode) ? r1(i.qty) + " " + unitWord(ing, i.qty, i.mode) : Math.round(i.qty) + " ג׳") + " " + ing.name.split(",")[0]; }).join(" · ");
     return '<div class="dsw" data-swipe="' + d.id + '"><div class="dswbg" aria-hidden="true">' + ICON.trash + '<span>מחיקה</span></div>' +
-      '<div class="r4 dish off' + (a ? " added" : "") + '" data-dish="' + d.id + '" role="button" aria-label="הוספת ' + esc(d.name) + ' לארוחה"><span class="dthumb">' + thumb(d) + '</span><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + (a ? '<span class="ok-t">✓ נוסף לארוחה ×' + n(a) + "</span>" : esc(sub)) + "</span></div>" +
+      '<div class="r4 dish off' + (a ? " added" : "") + '" data-dish="' + d.id + '" role="button" aria-label="פרטי המנה ' + esc(d.name) + '"><span class="dthumb">' + thumb(d) + '</span><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + (a ? '<span class="ok-t">✓ נוסף לארוחה ×' + n(a) + "</span>" : esc(sub)) + "</span></div>" +
       big(v, false) + '<span class="dacts"><button class="dact ed" data-editdish="' + d.id + '" aria-label="עריכת המנה" title="עריכה">' + ICON.pencil + '</button><button class="dact del" data-deldish="' + d.id + '" aria-label="מחיקת המנה" title="מחיקה">' + ICON.trash + "</button></span></div></div>";
   }
   function listHTML() {
@@ -1050,7 +1077,7 @@
   }
   function dbSeg() { return DB_CATS.map(function (c) { return '<button class="' + (c[0] === ui.dbCat ? "on" : "") + '" data-dbcat="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join(""); }
   function renderDB() {
-    $app.innerHTML = '<div class="set dbp">' + pageHead("מאגר ערכים", n(ING_LIST.length) + " מרכיבים" + (S.dishes().length ? " · " + n(S.dishes().length) + " מנות ★" : "") + " · ערכים ל־100 ג׳ וליחידה") +
+    $app.innerHTML = '<div class="set dbp"><button class="hdadd" data-act="custom" aria-label="הוספת מוצר חדש">＋ הוספה</button>' + pageHead("מאגר ערכים", n(ING_LIST.length) + " מרכיבים" + (S.dishes().length ? " · " + n(S.dishes().length) + " מנות ★" : "") + " · ערכים ל־100 ג׳ וליחידה") +
       '<div class="search"><span class="ic">' + ICON.search + '</span><input id="dbq" type="search" placeholder="חיפוש מרכיב או מנה, למשל: טופו" value="' + esc(ui.dbQ) + '" autocomplete="off"><button class="clr" data-act="dbclear" aria-label="ניקוי"' + (ui.dbQ ? "" : " hidden") + ">✕</button></div>" +
       '<div class="seg" id="dbseg">' + dbSeg() + '</div><div class="dblist" id="dblist">' + dbListHTML() + "</div></div>";
     hydrate($app);
@@ -1144,6 +1171,15 @@
           if (!window.Cloud || !Cloud.session()) { labelState("err", LABEL_ERR.signin); return; }
           if (navigator.onLine === false) { labelState("err", LABEL_ERR.offline); return; }
           document.getElementById("labelFile").click(); return;
+        case "dvq":
+          var dvd = S.dishes().filter(function (x) { return x.id === ui.dvDish; })[0]; if (!dvd) return;
+          ui.dvQty = Math.max(0.5, Math.min(6, (ui.dvQty || 1) + parseFloat(el.getAttribute("data-d"))));
+          document.getElementById("dvqn").textContent = String(ui.dvQty).replace(".5", "½").replace(/^0½$/, "½"); document.querySelector(".dvadd").innerHTML = dvBtn(dvd); return;
+        case "dvadd":
+          var dva = S.dishes().filter(function (x) { return x.id === ui.dvDish; })[0]; if (!dva || !draft) return;
+          addDishToDraft(dva, ui.dvQty || 1); closeSheet(); refreshBuild(); toast("נוסף לארוחה: " + dva.name); return;
+        case "dvedit": closeSheet(); sheetDish(ui.dvDish); return;
+        case "dvdel": closeSheet(); delDish(ui.dvDish); return;
         case "docustom":
           var cn = (document.getElementById("cName").value || "").trim(); var num = function (id) { return parseFloat(document.getElementById(id).value); };
           var k = num("cK"); if (!cn || !(k >= 0)) { toast("צריך שם וקלוריות ל־100 ג׳"); return; }
@@ -1225,16 +1261,7 @@
       var nq = d > 0 ? (Math.floor(it.qty / stp + 1e-9) + 1) * stp : (Math.ceil(it.qty / stp - 1e-9) - 1) * stp;
       setQty(id, it.mode, Math.max(0, Math.round(nq * 100) / 100)); refreshBuild(); return;
     }
-    if ((el = t.closest("[data-dish]"))) {
-      var dish = S.dishes().filter(function (x) { return x.id === el.getAttribute("data-dish"); })[0]; if (!dish) return;
-      dish.items.forEach(function (i) {
-        if (!ING[i.ingId]) return; var cur = draft.items[i.ingId];
-        if (!cur) setQty(i.ingId, i.mode, i.qty);
-        else if (cur.mode === i.mode) setQty(i.ingId, i.mode, cur.qty + i.qty);
-        else { var g = gramsOf(ING[i.ingId], cur.mode, cur.qty) + gramsOf(ING[i.ingId], i.mode, i.qty); setQty(i.ingId, "g", Math.round(g)); }
-      });
-      draft.added[dish.id] = (draft.added[dish.id] || 0) + 1; refreshBuild(); return;
-    }
+    if ((el = t.closest("[data-dish]"))) { sheetDishView(el.getAttribute("data-dish")); return; }   // v12: tap = detail sheet, add from there
   });
 
   // v10: swipe a saved dish left to delete (pointer events; vertical scrolling stays native via touch-action:pan-y)

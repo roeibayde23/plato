@@ -631,3 +631,31 @@ body.nofab #tipfab{display:none}
 @keyframes lspin{to{transform:rotate(360deg)}}
 .fld:has(input.fromlabel){background:#EEF6EA;border-color:#9DC29A;box-shadow:0 0 0 1px #9DC29A}
 input.fromlabel{color:#2F5F2C}
+/* ---------- v12 ---------- */
+/* values DB: "הוספה" at the top-left of the header */
+.dbp{position:relative}
+.hdadd{position:absolute;left:18px;top:calc(var(--st) + 14px);height:36px;padding:0 14px;border-radius:12px;border:1.5px solid var(--g);background:var(--paper);color:var(--gd);font:700 15px Assistant;display:inline-flex;align-items:center;gap:4px;z-index:2}
+.hdadd:active{background:var(--gl)}
+/* builder: chosen items (in the meal) get the soft calories light-brown */
+.r4.on,.r4.dish.added,.dsw .r4.dish.added{background:#F3E7D6}
+.r4.on{box-shadow:inset -3px 0 0 var(--c-kcal)}
+.dsw .r4.dish.added{box-shadow:inset -3px 0 0 var(--c-kcal)}
+.r4.dish.added .ok-t{color:var(--t-kcal);font-weight:700}
+/* saved-dish detail sheet */
+.dview .dvph{height:150px;border-radius:16px;background:#EFE8DA center/cover no-repeat;border:1px solid var(--ln);margin-bottom:12px}
+.dvtot{display:flex;align-items:stretch;gap:6px;background:var(--bg);border:1px solid var(--ln);border-radius:16px;padding:10px 10px;margin-bottom:10px;position:relative}
+.dvtot .dvlbl{position:absolute;top:-9px;right:14px;background:var(--paper);padding:0 6px;font:700 11.5px Assistant;color:var(--mut)}
+.dvm{flex:1;text-align:center;display:flex;flex-direction:column;gap:2px}
+.dvm b{font:700 22px "Frank Ruhl Libre";line-height:1.1}.dvm b small{font:600 12px Assistant;margin-inline-start:1px}
+.dvm span{font-size:12px;color:var(--mut)}
+.dvm.mk b{color:var(--t-kcal)}.dvm.mp b{color:var(--c-pro)}.dvm.mc b{color:var(--c-carb)}.dvm.mf b{color:var(--t-fat)}
+.dvitems{margin-bottom:10px;max-height:34vh;overflow:auto}
+.dvin{font:700 13px Assistant;color:var(--t-kcal);margin:-2px 4px 8px}
+.dvrow{display:flex;gap:10px;align-items:center}
+.dvq{display:flex;align-items:center;border:1.5px solid var(--ln);border-radius:14px;height:52px;background:var(--paper);flex:0 0 auto}
+.dvq button{width:40px;height:100%;font:700 22px Assistant;color:var(--gd)}
+.dvq b{min-width:26px;text-align:center;font:700 18px Assistant;color:var(--brd)}
+.dvrow .dvadd{flex:1;margin:0;font-size:16px}
+.dvacts{display:flex;justify-content:center;gap:26px;margin-top:10px}
+.dvacts .lnk{display:inline-flex;align-items:center;gap:5px;font:700 14px Assistant;color:var(--brd)}
+.dvacts .lnk svg{width:17px;height:17px}.dvacts .lnk.del{color:#9A4A33}

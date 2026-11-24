@@ -15,6 +15,7 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
     python3 test/v8.py http://127.0.0.1:8781/          # v8/v9: email + 6-digit code login, merge + sync with a mocked Supabase (no network)
     python3 test/v10.py http://127.0.0.1:8781/         # v10 (v11: floating 🧠 removed): insights for past days, ★ tab, green save, saved-dish edit/delete/swipe + undo
     python3 test/v10_day.py http://127.0.0.1:8781/     # v10.2: day view (option C): numbers vs goal, meals table with what he ate, מסקנות card, compact add
+    python3 test/v12.py http://127.0.0.1:8781/         # v12: 'הוספה' in the values-DB header, chosen items light-brown, saved-dish detail sheet
     python3 test/v11.py http://127.0.0.1:8781/         # v11: no 🧠, weekly kcal per bar, targeted tips, ★ dishes in the values DB, label scan (needs deno)
     (cd supabase/functions/plato-label && deno test --allow-net --allow-env label_test.ts)   # plato-label function unit tests (fake Gemini + fake auth)
     PLATO_E2E_FILE=creds.json python3 test/v8_real.py  # real Supabase e2e with a throwaway, pre-confirmed account (OTP calls stubbed, no mail sent; delete it afterwards)
