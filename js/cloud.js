@@ -169,6 +169,22 @@
       return p.then(function () { jset(AKEY, null); jset(SKEY, null); localStorage.setItem(MKEY, "local"); hooks.onStatus(status()); });
     },
     syncNow: function () { return run("manual"); },
+    // v11: label scan through the plato-label Edge Function (the Gemini key stays server-side). Rejects with e.code:
+    // signin · offline · network · not_signed_in · not_configured · no_label · no_per100 · implausible · rate_limited · too_large · bad_key · upstream
+    scanLabel: function (dataUrl) {
+      var fail = function (code, status) { var e = new Error(code); e.code = code; e.status = status || 0; return Promise.reject(e); };
+      if (!sess()) return fail("signin");
+      if (navigator.onLine === false) return fail("offline");
+      var m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl || ""); if (!m) return fail("bad_request");
+      return token().catch(function (e) { throw Object.assign(new Error("signin"), { code: e.status ? "signin" : "network" }); }).then(function (t) {
+        return fetch(CFG.url + "/functions/v1/plato-label", { method: "POST", headers: { Authorization: "Bearer " + t, apikey: CFG.key, "Content-Type": "application/json" }, body: JSON.stringify({ image: m[2], mime: m[1] }) })
+          .catch(function () { var e = new Error("network"); e.code = navigator.onLine === false ? "offline" : "network"; throw e; })
+          .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) {
+            if (r.ok && j && j.ok) return j;
+            var e = new Error((j && j.error) || "upstream"); e.code = (j && j.error) || (r.status === 404 ? "not_configured" : "upstream"); e.status = r.status; throw e;
+          }); });
+      });
+    },
     photoChanged: function (id, removed) { if (removed) { var s = sync(); s.photoDel = (s.photoDel || []).concat([id]); delete (s.photos || {})[id]; jset(SKEY, s); } },
     _run: run
   };

@@ -528,15 +528,7 @@ body.nofab #tipfab{display:none}
 
 /* ---------- v10 ---------- */
 /* 🧠 floating button: same size/style as the tip leaf, right next to it; slides with it when the leaf peeks */
-#brainfab{position:fixed;left:74px;bottom:calc(var(--sb) + 22px);z-index:45;transition:transform .45s cubic-bezier(.3,1.5,.5,1),opacity .3s,bottom .25s,border-color .2s,background .2s}
-#brainfab .emoji{font-size:27px;line-height:1}
-#brainfab:active{transform:scale(.94)}
-#tipfab.peek ~ #brainfab{transform:translateX(-46px)}
-#brainfab.lift{bottom:calc(var(--sb) + 92px)}
-#brainfab.on{background:var(--gl,#E7F0DC);box-shadow:0 0 0 3px rgba(46,107,42,.18),0 6px 16px rgba(46,107,42,.28)}
-body.sheet-open #brainfab,body.sum-open #brainfab{opacity:0;pointer-events:none}
-body.nofab #brainfab{display:none}
-/* insights: day switcher */
+#tipfab.peek ~ body.sheet-open body.nofab /* insights: day switcher */
 .inav{padding:2px 12px 0}
 .inav h1{font-size:23px;white-space:nowrap}
 .inav .ib:disabled{opacity:.3}
@@ -572,7 +564,6 @@ body.nofab #brainfab{display:none}
 .inav .ititle{flex:1;text-align:center;min-width:0}
 .inav .ititle h1{font-size:28px;padding:0;line-height:1.15}
 .inav .isub{font:600 15px Assistant;color:var(--mut);margin-top:2px}
-#brainfab[hidden]{display:none}
 
 /* ---------- v10.2: day view = Roei's option C (numbers first, meals table, מסקנות teaser) ---------- */
 .dayc .card{margin:12px 18px 0;background:var(--paper);border:1px solid var(--ln);border-radius:18px}
@@ -617,3 +608,26 @@ body.nofab #brainfab{display:none}
 .btn-sm{display:inline-flex;align-items:center;gap:4px;height:38px;padding:0 16px;border-radius:999px;border:1.5px solid var(--g);background:var(--paper);color:var(--gd);font:700 14.5px Assistant}
 .btn-sm:active{background:var(--gl)}
 .dayc .empty-card{margin:12px 18px 0}
+
+/* ---------- v11 ---------- */
+/* home weekly: kcal number above each bar (no average in the header) */
+.bars.kvb{height:100px;padding-top:22px}
+.bars.kvb .kv{font:700 10px Assistant;color:var(--mut);margin-bottom:2px;min-height:12px;white-space:nowrap;letter-spacing:-.2px}
+.bars.kvb .d.today .kv{color:var(--t-kcal)}
+.bars.kvb .d.over .kv{color:#9A4A33}
+/* values DB: saved dishes (★) */
+.dv.star,.dbp .seg [data-dbcat=dishes]{color:#B8892B}
+.dbdish .dthumb{flex:0 0 auto;margin-inline-end:10px}
+.dbdish .dthumb .dph{width:40px;height:40px;border-radius:10px}
+.dbdish .dst{color:#B8892B;font-weight:700}
+/* label scan (מרכיב משלי) */
+.lscan{display:flex;align-items:center;gap:10px;margin:2px 0 10px;padding:10px 12px;border:1.5px dashed #CDBF9F;border-radius:14px;background:#FBF7EE}
+.lscan .lsbtn{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.lscan .lsbtn svg{width:18px;height:18px}
+.lscan .lsnote{font-size:12.5px;line-height:1.35;color:var(--mut)}
+.lscan.done{border-style:solid;border-color:#9DC29A;background:#F1F7EE}.lscan.done .lsnote{color:#3F6B3C;font-weight:600}
+.lscan.err{border-style:solid;border-color:#E2B6A6;background:#FBF1EC}.lscan.err .lsnote{color:#9A4A33;font-weight:600}
+.lscan .spin{width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;display:inline-block;animation:lspin .8s linear infinite}
+@keyframes lspin{to{transform:rotate(360deg)}}
+.fld:has(input.fromlabel){background:#EEF6EA;border-color:#9DC29A;box-shadow:0 0 0 1px #9DC29A}
+input.fromlabel{color:#2F5F2C}

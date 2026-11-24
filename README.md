@@ -13,8 +13,10 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
     python3 test/v5.py http://127.0.0.1:8781/          # v5 features: tips, goals, teaspoon, save effect, DB edit, day view
     python3 test/v7.py http://127.0.0.1:8781/          # v7: edit items while building, מסקנות מהיום, frequent-only list, dish photos (+ WebKit)
     python3 test/v8.py http://127.0.0.1:8781/          # v8/v9: email + 6-digit code login, merge + sync with a mocked Supabase (no network)
-    python3 test/v10.py http://127.0.0.1:8781/         # v10: 🧠 floating button, insights for past days, ★ tab, green save, saved-dish edit/delete/swipe + undo
+    python3 test/v10.py http://127.0.0.1:8781/         # v10 (v11: floating 🧠 removed): insights for past days, ★ tab, green save, saved-dish edit/delete/swipe + undo
     python3 test/v10_day.py http://127.0.0.1:8781/     # v10.2: day view (option C): numbers vs goal, meals table with what he ate, מסקנות card, compact add
+    python3 test/v11.py http://127.0.0.1:8781/         # v11: no 🧠, weekly kcal per bar, targeted tips, ★ dishes in the values DB, label scan (needs deno)
+    (cd supabase/functions/plato-label && deno test --allow-net --allow-env label_test.ts)   # plato-label function unit tests (fake Gemini + fake auth)
     PLATO_E2E_FILE=creds.json python3 test/v8_real.py  # real Supabase e2e with a throwaway, pre-confirmed account (OTP calls stubbed, no mail sent; delete it afterwards)
 Screenshots go to `shots/`.
 
@@ -29,3 +31,8 @@ Screenshots go to `shots/`.
 Regenerate the DB file after Aki updates the JSON:
 
     python3 -c "import json;d=json.load(open('/workspace/plato/ingredients.json'));keep=['id','name_he','category','brand','is_roei_product','per_100g','units','source','flagged'];out={'daily_target':d['daily_target'],'ingredients':[{k:i.get(k) for k in keep} for i in d['ingredients']]};open('js/ingredients.js','w').write('window.PLATO_DB='+json.dumps(out,ensure_ascii=False)+';\n')"
+
+## Label scan (v11)
+`supabase/functions/plato-label/` is the Edge Function in the CASA project (PLATO-only, name `plato-label`, `verify_jwt=false` because it checks the user's JWT itself against `/auth/v1/user`).
+It reads the Gemini key from the secret `PLATO_GEMINI_KEY` (optional `PLATO_GEMINI_MODEL`, default `gemini-3.8-flash`, falls back to `gemini-3.5-flash-lite`).
+Without the secret it answers `503 {"error":"not_configured"}` and the app says "סריקת תוויות עוד לא הופעלה". This folder is not copied to GitHub Pages.

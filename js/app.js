@@ -200,10 +200,10 @@
   function weekMini(g) {
     var now = new Date(), week = [], sum = 0, cnt = 0, maxV = g.kcal * 1.15, H = 66;
     for (var i = 6; i >= 0; i--) { var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), k = S.day(S.dateKey(d)).totals.kcal; week.push({ d: d, k: k, today: i === 0 }); if (k > 0) { sum += k; cnt++; if (k > maxV) maxV = k; } }
-    var bars = week.map(function (w) { var h = w.k > 0 ? Math.max(4, Math.round(w.k / maxV * H)) : 0; return '<div class="d' + (w.today ? " today" : "") + (w.k > 0 ? "" : " none") + '"><i style="' + (h ? "height:" + h + "px" : "") + '"></i>' + DAYS[w.d.getDay()] + "</div>"; }).join("");
-    var goalTop = 6 + (H - Math.round(g.kcal / maxV * H));
-    return '<button class="sec link" data-go="#/weekly"><b>מעקב שבועי</b><span>' + (cnt ? "ממוצע " + n(fmt(sum / cnt)) + " · " : "") + "לפירוט ←</span></button>" +
-      '<button class="wk wkcard" data-go="#/weekly" aria-label="מעקב שבועי"><div class="bars"><span class="gl" style="top:' + goalTop + 'px"></span>' + bars + "</div></button>";
+    var bars = week.map(function (w) { var h = w.k > 0 ? Math.max(4, Math.round(w.k / maxV * H)) : 0; return '<div class="d' + (w.today ? " today" : "") + (w.k > 0 ? "" : " none") + (w.k > g.kcal * 1.05 ? " over" : "") + '"><span class="kv n">' + (w.k > 0 ? fmt(w.k) : "") + '</span><i style="' + (h ? "height:" + h + "px" : "") + '"></i>' + DAYS[w.d.getDay()] + "</div>"; }).join("");
+    var goalTop = 22 + (H - Math.round(g.kcal / maxV * H));   // v11: no average in the header; each bar shows its kcal
+    return '<button class="sec link" data-go="#/weekly"><b>מעקב שבועי</b><span>לפירוט ←</span></button>' +
+      '<button class="wk wkcard" data-go="#/weekly" aria-label="מעקב שבועי"><div class="bars kvb"><span class="gl" style="top:' + goalTop + 'px"></span>' + bars + "</div></button>";
   }
   function renderHome() {
     applyTheme();
@@ -271,10 +271,81 @@
     if (r[low] < exp * 0.85) return low === "protein" && h >= 19 ? "proteinEve" : low;
     return "good";
   }
+  // v11: targeted tips — what's actually missing / over today, with foods from HIS database (frequent first) and the amount that closes the gap
+  function pn(x) { return String(x); }   // tips are plain text (escaped), so no <span class=n> number wrappers
+  var TIP_PL = { "ביצה": "ביצים", "פרוסה": "פרוסות", "גביע": "גביעים", "כף": "כפות", "כפית": "כפיות", "אריזה": "אריזות", "מנה": "מנות", "כוס": "כוסות", "חופן": "חפנים", "חזה": "חזות" };
+  var TIP_MAC = {
+    protein: { cat: "protein", dens: function (p) { return p.protein * 4 / Math.max(1, p.kcal); }, min: 0.3, cap: 35 },
+    carbs: { cat: "carb", dens: function (p) { return p.carbs * 4 / Math.max(1, p.kcal); }, min: 0.55, cap: 55 },
+    fat: { cat: "fat", dens: function (p) { return p.fat * 9 / Math.max(1, p.kcal); }, min: 0.6, cap: 18 }
+  };
+  function tipAmount(ing, grams) {   // "3 ביצים" · "2 פרוסות גבינה צהובה 20%" · "200 ג׳ קוטג׳ 1%"
+    var food = ing.name.split(",")[0].trim(), u = ing.unit;
+    if (u && u.grams > 0) {
+      var k = Math.round(grams / u.grams), w = cleanUnit(u.name_he).split(" ")[0];
+      if (k >= 1 && k <= 4 && Math.abs(k * u.grams - grams) / grams <= 0.35 && (k === 1 || TIP_PL[w])) {
+        var lead = food.indexOf(w) === 0, unitTxt = k === 1 ? w : pn(k) + " " + TIP_PL[w];
+        return { txt: lead ? (k === 1 ? food : unitTxt) : unitTxt + " " + food, g: k * u.grams };
+      }
+    }
+    var gr = grams < 60 ? Math.max(5, Math.round(grams / 5) * 5) : Math.round(grams / 10) * 10;
+    return { txt: pn(gr) + " ג׳ " + food, g: gr };
+  }
+  function tipFoods(mac, need, roomK) {   // ranked by his use (frequency+recency), then his own products, then density; must fit the kcal left
+    var M = TIP_MAC[mac];
+    var list = ING_LIST.filter(function (i) { return i.p && i.p.kcal > 0 && i.p[mac] > 0 && M.dens(i.p) >= M.min && (i.cat === M.cat || S.useScore(i.id) > 0); });
+    list = list.map(function (i) { return { i: i, s: S.useScore(i.id) * 10 + (i.orig && i.orig.is_roei_product || i.custom ? 1 : 0) + M.dens(i.p) * 0.5 }; }).sort(function (a, b) { return b.s - a.s; }).map(function (o) { return o.i; });
+    var out = [], seen = {};
+    for (var k = 0; k < list.length && out.length < 2; k++) {
+      var ing = list[k], u = ing.unit, maxG = u && u.grams > 0 ? u.grams * (u.grams <= 80 ? 3 : u.grams <= 150 ? 2 : 1) : 250;
+      var grams = Math.min(maxG, need / (ing.p[mac] / 100)), a = tipAmount(ing, grams), v = valsFor(ing, a.g), key = ing.name.split(" ")[0];
+      if (seen[key]) continue;
+      if (roomK != null && v.kcal > Math.max(roomK, 120) + 60) continue;
+      seen[key] = 1; out.push({ txt: a.txt, got: Math.round(v[mac]), kcal: Math.round(v.kcal) });
+    }
+    return out;
+  }
+  function smartTips(name) {
+    var day = S.day(), t = day.totals, g = S.goal(), now = new Date(), h = now.getHours() + now.getMinutes() / 60;
+    if (!day.meals.length || t.kcal <= 0) return [];
+    var f = Math.max(0.2, Math.min(1, (h - 7) / 13)), late = h >= 20, early = h < 11.5, roomK = g.kcal - t.kcal, out = [];
+    var gap = { protein: g.protein - t.protein, carbs: g.carbs - t.carbs, fat: g.fat - t.fat };
+    var behind = function (m) { return t[m] < g[m] * f * 0.9; };
+    var gr = function (x) { return pn(Math.round(x)) + " ג׳"; };
+    var foodsTxt = function (fs, m, need) {
+      if (!fs.length) return "";
+      var a = fs[0], closes = a.got >= gap[m] * 0.85, w = m === "protein" ? "חלבון" : m === "carbs" ? "פחמימה" : "שומן";
+      return a.txt + (closes ? " יסגרו את הפער כמעט לגמרי" : " יוסיפו " + gr(a.got) + " " + w) + (fs[1] ? ", או " + fs[1].txt + " (" + gr(fs[1].got) + ")" : "") + ".";
+    };
+    // over on calories: gentle, never preachy
+    if (t.kcal > g.kcal * 1.02) {
+      var ot = name + ", עברנו את היעד היום ב־" + pn(fmt(t.kcal - g.kcal)) + " קלוריות. לא נורא 🌱 להמשך היום ירקות וכוס מים, ומחר מתאפסים.";
+      if (gap.protein > 15) { var lf = tipFoods("protein", Math.min(gap.protein, 25), 0); if (lf.length) ot += " ואם בכל זאת רעב: " + lf[0].txt + ", חלבוני וקל (" + pn(lf[0].kcal) + " קל׳)."; }
+      out.push(ot);
+    }
+    // protein short — the main one
+    if (gap.protein > 8 && behind("protein") && t.kcal <= g.kcal * 1.02) {
+      var need = late ? Math.min(gap.protein, 45) : Math.min(gap.protein, TIP_MAC.protein.cap), fs = tipFoods("protein", need, roomK);
+      var head = early ? "בוקר טוב " + name + " ☀️ יש עוד " + gr(gap.protein) + " חלבון ליום. להתחיל חזק: " : late ? "ערב טוב " + name + " 🌙 נשארו עוד " + gr(gap.protein) + " חלבון. " : name + ", חסרים עוד " + gr(gap.protein) + " חלבון היום 💪 ";
+      if (fs.length) out.push(head + foodsTxt(fs, "protein", need) + (late && gap.protein > 45 ? " לא חייבים לסגור הכל הערב." : ""));
+    }
+    // over on fat / carbs: a gentle note
+    if (t.fat > g.fat * 1.08) out.push("השומן כבר " + gr(t.fat) + " מתוך " + gr(g.fat) + " היום. לא דרמה 🙂 להמשך היום עדיף חלבון רזה וירקות, ושמן או טחינה למדוד בכפית.");
+    else if (!late && f < 0.75 && t.fat > g.fat * f * 1.5 && t.fat > g.fat * 0.6) out.push(name + ", השומן רץ היום מהר מהקלוריות (" + gr(t.fat) + " מתוך " + gr(g.fat) + "). בארוחה הבאה כדאי ללכת על חלבון רזה, וזהו 🫒");
+    if (t.carbs > g.carbs * 1.08) out.push("הפחמימה כבר " + gr(t.carbs) + " מתוך " + gr(g.carbs) + ". בארוחה הבאה אפשר לוותר על הלחם/האורז ולמלא בירקות וחלבון 🥗");
+    // carbs / fat short (only if there's room in the calories)
+    if (gap.carbs > 20 && behind("carbs") && roomK > 150) { var cn = Math.min(gap.carbs, TIP_MAC.carbs.cap), cf = tipFoods("carbs", cn, roomK); if (cf.length) out.push(name + ", חסרה עוד פחמימה (" + gr(gap.carbs) + "). " + (h >= 7 && h < 18 ? "אנרגיה לשאר היום: " : "") + foodsTxt(cf, "carbs", cn)); }
+    if (gap.fat > 8 && behind("fat") && roomK > 100) { var fn = Math.min(gap.fat, TIP_MAC.fat.cap), ff = tipFoods("fat", fn, roomK); if (ff.length) out.push("השומן הטוב עוד חסר (" + gr(gap.fat) + "). " + foodsTxt(ff, "fat", fn) + " 🥑"); }
+    // a lot of calories left late in the day
+    if (!out.length && h >= 18.5 && roomK > g.kcal * 0.35) out.push(name + ", נשארו עוד " + pn(fmt(roomK)) + " קלוריות להיום. ארוחת ערב מלאה בהחלט בתכנון 🍽️");
+    return out.slice(0, 3);
+  }
   function tipText(cat, rot) {
     var pool = TIPS[cat], d = S.dateKey(), seed = 0; for (var i = 0; i < d.length; i++) seed = (seed * 31 + d.charCodeAt(i)) % 997;
-    var name = (S.profile().name || "").trim() || "רועי";
-    return pool[(seed + rot) % pool.length].replace(/\{n\}/g, name);
+    var name = (S.profile().name || "").trim() || "רועי", sm = [];
+    try { sm = smartTips(name); } catch (e) { sm = []; }
+    if (rot < sm.length) return sm[rot];   // targeted first, then the general pool ("עוד טיפ ↻" walks through both)
+    return pool[(seed + rot - sm.length) % pool.length].replace(/\{n\}/g, name);
   }
   // ---------- floating tip button (all screens): peeks from the edge, pops out when there's a new relevant tip ----------
   var fab = { el: null, idle: null, autoClose: null, lastKey: "" };
@@ -285,20 +356,12 @@
     d.innerHTML = '<div class="tippop" id="tippop" role="dialog" aria-label="טיפ אישי" hidden><p id="tiptext"></p><div class="tpb"><button data-act="tipnext">עוד טיפ ↻</button><button class="x" data-act="tipclose" aria-label="סגירה">✕</button></div></div>' +
       '<button class="fab" data-act="tipopen" aria-label="טיפ אישי"><img src="icons/logo.png" alt=""><span class="badge"></span></button>';
     document.body.appendChild(d); fab.el = d;
-    var bf = document.createElement("button"); bf.id = "brainfab"; bf.className = "fab brainfab"; bf.setAttribute("data-act", "brainfab");   // v10: 🧠 floats next to the tip leaf
-    bf.innerHTML = '<span class="emoji">🧠</span>'; document.body.appendChild(bf); fab.brain = bf;
     new MutationObserver(function () { document.body.classList.toggle("sheet-open", $sheet.children.length > 0); if ($sheet.children.length) tipClose(true); }).observe($sheet, { childList: true });
     window.addEventListener("scroll", fabPeekSoon, { passive: true });
     document.addEventListener("scroll", function (e) { if (e.target && e.target.id === "list") fabPeekSoon(); }, true);
     setInterval(fabCheck, 60000);
   }
-  function brainKey() { var h = location.hash || "#/"; if (/^#\/(day|insights)\/\d{4}-\d\d-\d\d$/.test(h)) return h.split("/")[2]; if (h.indexOf("#/build") === 0 && draft) return draft.date; return S.dateKey(); }
-  function brainPlace() {
-    var bf = fab.brain; if (!bf) return; var h = location.hash || "#/", on = h.indexOf("#/insights/") === 0, k = brainKey(), x = insights(k);
-    bf.classList.toggle("lift", h.indexOf("#/build") === 0); bf.classList.toggle("on", on); bf.hidden = on || h.indexOf("#/day/") === 0;   // v10.1: no 🧠 on the insights screen itself · v10.2: nor on the day view (it has the מסקנות card) bf.classList.toggle("sofar", !on && k === S.dateKey() && !x.empty && x.partial);
-    bf.setAttribute("aria-label", on ? "סגירת מה היה טוב ומה חסר" : "מה היה טוב ומה חסר " + (k === S.dateKey() ? "היום" : "ביום הזה")); bf.title = "מה היה טוב ומה חסר";
-  }
-  function fabPlace() { if (!fab.el) return; brainPlace(); var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
+  function fabPlace() { if (!fab.el) return; var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
   function fabOut(fresh) {
     var e = fab.el; if (!e) return; clearTimeout(fab.idle);
     e.classList.remove("peek"); e.classList.add("out"); if (fresh) { e.classList.remove("bounce2"); void e.offsetWidth; e.classList.add("bounce2", "new"); }
@@ -647,7 +710,8 @@
     var opts = Object.keys(CAT_LABEL).map(function (k) { return '<option value="' + k + '"' + (k === defCat ? " selected" : "") + ">" + CAT_LABEL[k] + "</option>"; }).join("");
     var f = function (id, l, u) { return '<div class="frow"><span>' + l + '</span><span class="fld"><input id="' + id + '" type="number" inputmode="decimal" min="0" step="any"><span>' + u + "</span></span></div>"; };
     openSheet(head("מרכיב משלי", "🥣") +
-      '<div class="sh-body"><div class="frow"><span>שם</span><span class="fld wide"><input id="cName" type="text" maxlength="40" placeholder="שם המרכיב" style="text-align:right"></span></div>' +
+      '<div class="sh-body"><div class="lscan" id="lscan"><button class="btn sm2 lsbtn" data-act="scanlabel" type="button">' + ICON.camera + ' צלם תווית</button><span class="lsnote" id="lsnote">צילום של טבלת הערכים התזונתיים ימלא את השדות</span><input type="file" accept="image/*" id="labelFile" hidden></div>' +
+      '<div class="frow"><span>שם</span><span class="fld wide"><input id="cName" type="text" maxlength="40" placeholder="שם המרכיב" style="text-align:right"></span></div>' +
       '<div class="frow"><span>קטגוריה</span><span class="fld wide"><select id="cCat">' + opts + "</select></span></div>" +
       f("cK", "קלוריות ל־100 ג׳", "") + f("cP", "חלבון ל־100 ג׳", "ג׳") + f("cC", "פחמימה ל־100 ג׳", "ג׳") + f("cF", "שומן ל־100 ג׳", "ג׳") +
       '<div class="frow"><span>יחידה (רשות)</span><span class="fld"><input id="cU" type="text" maxlength="14" placeholder="פרוסה" style="text-align:right"></span></div>' +
@@ -705,6 +769,58 @@
     };
     img.onerror = function () { URL.revokeObjectURL(url); cb(null); };
     img.src = url;
+  }
+  // v11: label photo -> keep aspect, long side <= max, JPEG (small enough for the Edge Function, sharp enough for the digits)
+  function labelImage(file, max, cb) {
+    var url = URL.createObjectURL(file), img = new Image();
+    img.onload = function () {
+      var w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h)), c = document.createElement("canvas");
+      c.width = Math.round(w * k); c.height = Math.round(h * k); var ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); cb(c.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); cb(null); };
+    img.src = url;
+  }
+  var LABEL_ERR = {
+    signin: "סריקת תווית עובדת כשמחוברים לחשבון (תפריט ← חשבון). בינתיים אפשר למלא ידנית",
+    not_signed_in: "צריך להתחבר מחדש לחשבון כדי לסרוק תווית",
+    offline: "אין חיבור כרגע. אפשר למלא ידנית, או לצלם שוב כשיש רשת",
+    network: "לא הצלחתי להגיע לשרת. נסו שוב עוד רגע, או מלאו ידנית",
+    not_configured: "סריקת תוויות עוד לא הופעלה בשרת. בינתיים אפשר למלא ידנית",
+    no_label: "לא מצאתי טבלה תזונתית בתמונה. נסו צילום קרוב, ישר וחד של הטבלה",
+    no_per100: "בתווית יש רק ערכים למנה בלי משקל המנה. אפשר למלא ידנית",
+    implausible: "המספרים שיצאו לא הגיוניים. נסו צילום חד יותר של הטבלה",
+    rate_limited: "יותר מדי סריקות בזמן קצר. נסו שוב בעוד דקה",
+    too_large: "התמונה גדולה מדי. נסו שוב",
+    bad_type: "סוג הקובץ לא נתמך. צלמו תמונה רגילה",
+    bad_key: "יש בעיה במפתח של שירות הסריקה בשרת",
+    upstream: "שירות הסריקה לא ענה כרגע. נסו שוב עוד רגע, או מלאו ידנית"
+  };
+  function labelState(state, msg) {
+    var b = document.querySelector('[data-act="scanlabel"]'), nt = document.getElementById("lsnote"), box = document.getElementById("lscan"); if (!b || !nt) return;
+    b.disabled = state === "busy"; b.innerHTML = state === "busy" ? '<span class="spin"></span> קורא את התווית…' : ICON.camera + (state === "done" ? " צילום מחדש" : " צלם תווית");
+    box.className = "lscan" + (state === "err" ? " err" : state === "done" ? " done" : "");
+    nt.textContent = msg || "צילום של טבלת הערכים התזונתיים ימלא את השדות";
+  }
+  function labelScan(file) {
+    labelState("busy");
+    labelImage(file, 1600, function (d) {
+      if (!d) { labelState("err", "לא הצלחתי לקרוא את התמונה"); return; }
+      if (!window.Cloud) { labelState("err", LABEL_ERR.network); return; }
+      Cloud.scanLabel(d).then(function (r) {
+        if (!document.getElementById("cK")) return;   // sheet closed meanwhile
+        var put = function (id, v) { var el = document.getElementById(id); if (!el || v == null) return; el.value = v; el.classList.add("fromlabel"); };
+        put("cK", r.per100.kcal); put("cP", r.per100.protein); put("cC", r.per100.carbs); put("cF", r.per100.fat);
+        if (r.unit) { put("cU", cleanUnit(r.unit.name)); put("cUG", r.unit.grams); }
+        var nm = document.getElementById("cName"); if (nm && !nm.value.trim() && r.name) { nm.value = r.name; nm.classList.add("fromlabel"); }
+        labelState("done", "✓ מולא מהתווית" + (r.basis === "serving" ? " (חושב ל־100 ג׳ מתוך מנה)" : "") + (r.check ? " · שווה לבדוק: הקלוריות לא מסתדרות עם המאקרו" : " · כדאי לעבור על המספרים") + ", לתת שם ולשמור");
+        if (nm && !nm.value.trim()) nm.focus();
+      }).catch(function (e) {
+        var code = (e && e.code) || "upstream";
+        labelState("err", LABEL_ERR[code] || LABEL_ERR.upstream);
+        if (code === "signin" || code === "not_signed_in") { var b = document.querySelector('[data-act="scanlabel"]'); if (b) b.innerHTML = ICON.camera + " צלם תווית"; }
+      });
+    });
   }
   function goalField(id, label, val, unit, step, color) {
     return '<div class="frow gf"><span><i class="dot" style="background:' + color + '"></i>' + label + '</span><span class="gstp"><button data-gstep="-' + step + '" data-g="' + id + '" aria-label="פחות">−</button><span class="fld"><input id="' + id + '" type="number" inputmode="numeric" step="' + step + '" value="' + val + '"><span>' + unit + '</span></span><button data-gstep="' + step + '" data-g="' + id + '" aria-label="יותר">+</button></span></div>';
@@ -904,28 +1020,42 @@
   }
 
   // ---------- values database ----------
-  var DB_CATS = [["all", "הכל"], ["protein", "חלבון"], ["carb", "פחמימה"], ["fat", "שומן"], ["vegetable", "ירקות"], ["fruit", "פירות"], ["other", "אחר"], ["mine", "שלי"]];
+  var DB_CATS = [["all", "הכל"], ["dishes", "★ מנות"], ["protein", "חלבון"], ["carb", "פחמימה"], ["fat", "שומן"], ["vegetable", "ירקות"], ["fruit", "פירות"], ["other", "אחר"], ["mine", "שלי"]];
   var CAT_IC = { protein: "🥚", carb: "🍞", fat: "🫒", vegetable: "🥒", fruit: "🍎", other: "🥫" };
   function dbRow(i) {
     var tags = (i.est ? '<span class="tag est">הערכה</span>' : "") + (i.custom ? '<span class="tag mine">שלי</span>' : "") + (i.edited ? '<span class="tag ed">ערכתי</span>' : "");
     var pu = i.unit ? " · " + esc(cleanUnit(i.unit.name_he)) + " = " + n(Math.round(valsFor(i, i.unit.grams).kcal)) : "";
     return '<button class="r4 off dbr" data-ing="' + i.id + '"><div class="rt"><b class="nm">' + esc(i.name) + tags + '</b><span class="bs">ל־' + n(100) + " ג׳" + pu + "</span></div>" + big(i.p, false) + ICON.chevL + "</button>";
   }
+  // v11: saved dishes live in the values DB too (★ מנות filter, a ★ section on top of "הכל", and in search); per-serving totals; tap = the dish editor
+  function dbDishRow(d) {
+    var v = dishTotals(d), its = d.items.filter(function (i) { return ING[i.ingId]; });
+    var sub = '<span class="dst">★ למנה</span> · פחמ׳ ' + n(r0(v.carbs)) + " · שומן " + n(r0(v.fat)) + " ג׳";
+    return '<button class="r4 off dbr dbdish" data-editdish="' + d.id + '" aria-label="עריכת המנה ' + esc(d.name) + '" title="' + its.length + ' מרכיבים"><span class="dthumb">' + thumb(d) + '</span><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + sub + "</span></div>" + big(v, false) + ICON.chevL + "</button>";
+  }
+  function dbDishes(q) { return byUse(S.dishes().filter(function (d) { return !q || d.name.toLowerCase().indexOf(q) >= 0 || d.items.some(function (i) { return ING[i.ingId] && ING[i.ingId].name.toLowerCase().indexOf(q) >= 0; }); }), function (d) { return "dish:" + d.id; }); }
   function dbListHTML() {
     var q = ui.dbQ.trim().toLowerCase(), c = ui.dbCat;
-    var list = ING_LIST.filter(function (i) { return (c === "all" || (c === "mine" ? i.custom : i.cat === c)) && (!q || i.name.toLowerCase().indexOf(q) >= 0); });
     var add = '<button class="addcustom" data-act="custom">＋ הוספת מרכיב משלי</button>';
-    if (!list.length) return '<div class="listmsg">' + (q ? 'לא נמצא מרכיב בשם "' + esc(ui.dbQ.trim()) + '"' : c === "mine" ? "עוד לא הוספת מרכיבים משלך" : "אין מרכיבים") + "</div>" + add;
-    if (c === "all" && !q) return Object.keys(CAT_LABEL).map(function (k) { var g = list.filter(function (i) { return i.cat === k; }); return g.length ? '<div class="dv">' + CAT_LABEL[k] + " · " + n(g.length) + "</div>" + g.map(dbRow).join("") : ""; }).join("") + add;
-    return '<div class="dv">' + n(list.length) + " תוצאות</div>" + list.map(dbRow).join("") + add;
+    if (c === "dishes") {
+      var ds = dbDishes(q);
+      if (!ds.length) return '<div class="listmsg">' + (q ? 'לא נמצאה מנה בשם "' + esc(ui.dbQ.trim()) + '"' : "עוד אין מנות שמורות. בונים ארוחה ושומרים אותה עם 🔖") + "</div>";
+      return '<div class="dv">★ מנות שמורות · ' + n(ds.length) + " · ערכים למנה</div>" + ds.map(dbDishRow).join("");
+    }
+    var list = ING_LIST.filter(function (i) { return (c === "all" || (c === "mine" ? i.custom : i.cat === c)) && (!q || i.name.toLowerCase().indexOf(q) >= 0); });
+    var dl = c === "all" ? dbDishes(q) : [], dh = dl.length ? '<div class="dv star">★ מנות שמורות · ' + n(dl.length) + "</div>" + dl.map(dbDishRow).join("") : "";
+    if (!list.length && !dl.length) return '<div class="listmsg">' + (q ? 'לא נמצא מרכיב בשם "' + esc(ui.dbQ.trim()) + '"' : c === "mine" ? "עוד לא הוספת מרכיבים משלך" : "אין מרכיבים") + "</div>" + add;
+    if (c === "all" && !q) return dh + Object.keys(CAT_LABEL).map(function (k) { var g = list.filter(function (i) { return i.cat === k; }); return g.length ? '<div class="dv">' + CAT_LABEL[k] + " · " + n(g.length) + "</div>" + g.map(dbRow).join("") : ""; }).join("") + add;
+    return dh + (list.length ? '<div class="dv">' + n(list.length) + " " + (dl.length ? "מרכיבים" : "תוצאות") + "</div>" + list.map(dbRow).join("") : "") + add;
   }
   function dbSeg() { return DB_CATS.map(function (c) { return '<button class="' + (c[0] === ui.dbCat ? "on" : "") + '" data-dbcat="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join(""); }
   function renderDB() {
-    $app.innerHTML = '<div class="set dbp">' + pageHead("מאגר ערכים", n(ING_LIST.length) + " מרכיבים · ערכים ל־100 ג׳ וליחידה") +
-      '<div class="search"><span class="ic">' + ICON.search + '</span><input id="dbq" type="search" placeholder="חיפוש מרכיב, למשל: טופו" value="' + esc(ui.dbQ) + '" autocomplete="off"><button class="clr" data-act="dbclear" aria-label="ניקוי"' + (ui.dbQ ? "" : " hidden") + ">✕</button></div>" +
+    $app.innerHTML = '<div class="set dbp">' + pageHead("מאגר ערכים", n(ING_LIST.length) + " מרכיבים" + (S.dishes().length ? " · " + n(S.dishes().length) + " מנות ★" : "") + " · ערכים ל־100 ג׳ וליחידה") +
+      '<div class="search"><span class="ic">' + ICON.search + '</span><input id="dbq" type="search" placeholder="חיפוש מרכיב או מנה, למשל: טופו" value="' + esc(ui.dbQ) + '" autocomplete="off"><button class="clr" data-act="dbclear" aria-label="ניקוי"' + (ui.dbQ ? "" : " hidden") + ">✕</button></div>" +
       '<div class="seg" id="dbseg">' + dbSeg() + '</div><div class="dblist" id="dblist">' + dbListHTML() + "</div></div>";
+    hydrate($app);
   }
-  function refreshDB() { document.getElementById("dblist").innerHTML = dbListHTML(); document.getElementById("dbseg").innerHTML = dbSeg(); var c = document.querySelector("#app .search .clr"); if (c) c.hidden = !ui.dbQ; }
+  function refreshDB() { var L = document.getElementById("dblist"); if (!L) return; L.innerHTML = dbListHTML(); hydrate(L); document.getElementById("dbseg").innerHTML = dbSeg(); var c = document.querySelector("#app .search .clr"); if (c) c.hidden = !ui.dbQ; }
   function sheetEditIng(id) {
     var i = ING[id]; if (!i) return;
     var u = i.unit, f = function (fid, l, v, unit) { return '<div class="frow"><span>' + l + '</span><span class="fld"><input id="' + fid + '" type="number" inputmode="decimal" min="0" step="any" value="' + (v == null ? "" : Math.round(v * 10) / 10) + '">' + (unit ? "<span>" + unit + "</span>" : "") + "</span></div>"; };
@@ -1008,8 +1138,12 @@
           savePhoto(nd.id, ui.pendPhoto || undefined, function () { closeSheet(); refreshBuild(); toast("נשמר ב־★ · " + nm); }); return;
         case "doeditdish":
           var en = (document.getElementById("dishName").value || "").trim(); if (!en) { toast("צריך שם למנה"); return; }
-          S.updateDish(ui.editDish, { name: en }); savePhoto(ui.editDish, ui.pendPhoto, function () { closeSheet(); if (draft) refreshBuild(); toast("המנה עודכנה"); }); return;
+          S.updateDish(ui.editDish, { name: en }); savePhoto(ui.editDish, ui.pendPhoto, function () { closeSheet(); if (draft && document.getElementById("list")) refreshBuild(); if ((location.hash || "").indexOf("#/db") === 0) refreshDB(); toast("המנה עודכנה"); }); return;
         case "rmdishphoto": setPend(null); return;
+        case "scanlabel":   // pre-check so he isn't sent to the camera for nothing
+          if (!window.Cloud || !Cloud.session()) { labelState("err", LABEL_ERR.signin); return; }
+          if (navigator.onLine === false) { labelState("err", LABEL_ERR.offline); return; }
+          document.getElementById("labelFile").click(); return;
         case "docustom":
           var cn = (document.getElementById("cName").value || "").trim(); var num = function (id) { return parseFloat(document.getElementById(id).value); };
           var k = num("cK"); if (!cn || !(k >= 0)) { toast("צריך שם וקלוריות ל־100 ג׳"); return; }
@@ -1026,7 +1160,6 @@
         case "fixcancel": var fi = document.getElementById("fixIn"); if (fi) fi.value = ""; ui.fixAdding = false; renderSettings(); return;
         case "menu": openMenu(); return;
         case "goals": closeSheet(); sheetGoal(); return;
-        case "brainfab": tipClose(true); if ((location.hash || "").indexOf("#/insights/") === 0) { var fr = ui.insFrom || "#/"; go(fr.indexOf("#/day/") === 0 ? "#/day/" + brainKey() : fr.indexOf("#/build") === 0 && draft ? "#/build" : "#/"); } else go("#/insights/" + brainKey()); return;
         case "tipopen": if (fab.el.classList.contains("open")) tipClose(); else tipOpen(false); return;
         case "tipclose": tipClose(); return;
         case "tipnext": var rt = tipRot() + 1, x0 = tipNow(); S.setPrefs({ tip: { date: S.dateKey(), hidden: false, rot: rt, seenKey: tipKey(x0) } }); document.getElementById("tiptext").textContent = tipText(x0.cat, rt); clearTimeout(fab.autoClose); return;
@@ -1078,6 +1211,7 @@
     if ((el = t.closest("[data-wdel]"))) { if (!arm(el, "w" + el.getAttribute("data-wdel"))) return; S.deleteWeight(el.getAttribute("data-wdel")); renderWeight(); return; }
     if ((el = t.closest("[data-fixtoggle]"))) { S.toggleFix(el.getAttribute("data-fixtoggle")); renderSettings(); return; }
     if ((el = t.closest("[data-fixdel]"))) { if (!arm(el, "fix" + el.getAttribute("data-fixdel"))) return; S.deleteFix(el.getAttribute("data-fixdel")); renderSettings(); return; }
+    if ((el = t.closest(".dbdish[data-editdish]"))) { sheetDish(el.getAttribute("data-editdish")); return; }   // v11: saved dishes in the values DB
     if (!draft) return;
     if ((el = t.closest("[data-tab]"))) { draft.tab = el.getAttribute("data-tab"); draft.q = ""; var qi = document.getElementById("q"); if (qi) qi.value = ""; renderBuild(); return; }
     if ((el = t.closest("[data-add]"))) { var ing = ING[el.getAttribute("data-add")]; setQty(ing.id, ing.defMode, ing.defMode === "u" ? 1 : 100); refreshBuild(); return; }
@@ -1148,6 +1282,7 @@
       var id = t.getAttribute("data-qty") || t.getAttribute("data-eq"), it = draft.items[id]; var v = parseFloat(t.value);
       setQty(id, it ? it.mode : ING[id].defMode, isFinite(v) ? Math.max(0, v) : 0); refreshBuild(); return;
     }
+    if (t.id === "labelFile" && t.files && t.files[0]) { labelScan(t.files[0]); t.value = ""; return; }
     if ((t.id === "dishPhoto" || t.id === "dishPhoto2") && t.files && t.files[0]) {
       resizeImage(t.files[0], 360, function (d) { if (d) setPend(d); else toast("לא הצלחתי לקרוא את התמונה"); });
       t.value = ""; return;
