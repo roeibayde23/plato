@@ -144,6 +144,8 @@
     ui.prevHash = ui.curHash || ""; ui.curHash = h;
     closeSheet();
     if (h.indexOf("#/login") === 0) { renderLogin(); window.scrollTo(0, 0); fabPlace(); return; }
+    // v13: a new account (no profile, no goals yet) fills in its details + goals before anything else
+    if (h.indexOf("#/welcome") === 0 || S.needsOnboard()) { if (!S.needsOnboard() && !ui.onb) { location.replace("#/"); return; } renderWelcome(h === "#/welcome/2" && ui.onb && ui.onb.ok1 ? 2 : 1); window.scrollTo(0, 0); fabPlace(); return; }
     if (h.indexOf("#/build") === 0) { if (!draft) newDraft(mealByTime()); renderBuild(); }
     else if (h.indexOf("#/settings") === 0) renderSettings();
     else if (h.indexOf("#/db") === 0) renderDB();
@@ -342,10 +344,10 @@
   }
   function tipText(cat, rot) {
     var pool = TIPS[cat], d = S.dateKey(), seed = 0; for (var i = 0; i < d.length; i++) seed = (seed * 31 + d.charCodeAt(i)) % 997;
-    var name = (S.profile().name || "").trim() || "רועי", sm = [];
+    var name = (S.profile().name || "").trim(), sm = [];   // v13: no hardcoded name any more (it used to fall back to "רועי")
     try { sm = smartTips(name); } catch (e) { sm = []; }
-    if (rot < sm.length) return sm[rot];   // targeted first, then the general pool ("עוד טיפ ↻" walks through both)
-    return pool[(seed + rot - sm.length) % pool.length].replace(/\{n\}/g, name);
+    var t = rot < sm.length ? sm[rot] : pool[(seed + rot - sm.length) % pool.length].replace(/\{n\}/g, name);   // targeted first, then the general pool ("עוד טיפ ↻" walks through both)
+    return name ? t : t.replace(/^\s*,\s*/, "").replace(/ ([,!.])/g, "$1").replace(/\s{2,}/g, " ").trim();
   }
   // ---------- floating tip button (all screens): peeks from the edge, pops out when there's a new relevant tip ----------
   var fab = { el: null, idle: null, autoClose: null, lastKey: "" };
@@ -361,7 +363,7 @@
     document.addEventListener("scroll", function (e) { if (e.target && e.target.id === "list") fabPeekSoon(); }, true);
     setInterval(fabCheck, 60000);
   }
-  function fabPlace() { if (!fab.el) return; var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
+  function fabPlace() { if (!fab.el) return; var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0 || (location.hash || "").indexOf("#/welcome") === 0 || S.needsOnboard()); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
   function fabOut(fresh) {
     var e = fab.el; if (!e) return; clearTimeout(fab.idle);
     e.classList.remove("peek"); e.classList.add("out"); if (fresh) { e.classList.remove("bounce2"); void e.offsetWidth; e.classList.add("bounce2", "new"); }
@@ -385,7 +387,7 @@
   function insights(key) {
     var g = S.goal(), day = S.day(key), t = day.totals, today = key === S.dateKey(), now = new Date();
     var h = now.getHours() + now.getMinutes() / 60, f = today ? Math.max(0.25, Math.min(1, (h - 7) / 13)) : 1, full = f >= 1;
-    var name = (S.profile().name || "").trim() || "אלוף", good = [], miss = [], focus = [];
+    var name = (S.profile().name || "").trim(), good = [], miss = [], focus = [];
     var meals = day.meals, cnt = meals.length;
     if (!cnt) return { empty: true, partial: !full, name: name, good: [], miss: [], focus: [] };
     var rk = t.kcal / Math.max(1, g.kcal * f), rp = t.protein / Math.max(1, g.protein * f), rc = t.carbs / Math.max(1, g.carbs * f), rf = t.fat / Math.max(1, g.fat * f);
@@ -569,6 +571,7 @@
   }
   function imgPut(id, data, cb) { idb(function (db) { if (!db) return cb(false); try { var tx = db.transaction("dish", "readwrite"); tx.objectStore("dish").put(data, id); tx.oncomplete = function () { IMG.cache[id] = data; cb(true); }; tx.onerror = tx.onabort = function () { cb(false); }; } catch (e) { cb(false); } }); }
   function imgGet(id, cb) { if (IMG.cache[id]) return cb(IMG.cache[id]); idb(function (db) { if (!db) return cb(null); try { var q = db.transaction("dish").objectStore("dish").get(id); q.onsuccess = function () { if (q.result) IMG.cache[id] = q.result; cb(q.result || null); }; q.onerror = function () { cb(null); }; } catch (e) { cb(null); } }); }
+  function imgClear() { IMG.cache = {}; idb(function (db) { if (db) try { db.transaction("dish", "readwrite").objectStore("dish").clear(); } catch (e) {} }); }   // v13: on sign-out / account switch
   function imgDel(id) { delete IMG.cache[id]; idb(function (db) { if (db) try { db.transaction("dish", "readwrite").objectStore("dish").delete(id); } catch (e) {} }); }
   function noop() {}
   function hydrate(root) {
@@ -775,7 +778,7 @@
       numField("pH", "גובה", Number(p.height).toFixed(2), "מ׳", "0.01") + numField("pA", "גיל", p.age, "", "1") + '</div><button class="btn pri" data-act="saveprofile">שמירה</button>' +
       '<div class="gt" style="padding:20px 4px 8px">מעקב משקל</div><div class="wbox" id="wbox">' + wboxInner() + "</div>", "profile");
   }
-  function avatarInner(p) { return p.photo ? '<img src="' + p.photo + '" alt="תמונת פרופיל">' : '<span class="ini">' + esc((p.name || "ר").trim().charAt(0) || "ר") + "</span>"; }
+  function avatarInner(p) { return p.photo ? '<img src="' + p.photo + '" alt="תמונת פרופיל">' : '<span class="ini">' + esc((p.name || "").trim().charAt(0) || "🙂") + "</span>"; }
   function avatarHTML(p) {
     return '<div class="avwrap"><div class="av" id="avatar">' + avatarInner(p) + '</div><button class="cam" data-act="photo" aria-label="הוספת תמונה" title="הוספת תמונה"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button>' +
       '<input id="photoFile" type="file" accept="image/*" hidden></div><button class="linkbtn rmphoto" data-act="rmphoto"' + (p.photo ? "" : " hidden") + ">הסרת התמונה</button>";
@@ -946,8 +949,83 @@
     if (c.length < 6) return authErr("הקוד בן 6 ספרות");
     authErr(""); authBusy(true, "בודק…");
     Cloud.verifyCode(o.email, c).then(function () {
-      localStorage.removeItem(OTPK); clearInterval(otpTick); loadIngredients(); go("#/"); toast("מחובר · הנתונים מסונכרנים ☁️");
+      localStorage.removeItem(OTPK); clearInterval(otpTick); loadIngredients(); go("#/"); if (!S.needsOnboard()) toast("מחובר · הנתונים מסונכרנים ☁️");   // v13: a new account goes to the welcome flow instead
     }).catch(function (e) { authBusy(false, "כניסה"); authErr(e.message || "לא הצלחתי להתחבר"); });
+  }
+  // ---------- v13: welcome flow for a new account — personal details → goals → home ----------
+  var OACT = [["0", "לא מתאמנים", 1.2], ["1", "1–2 בשבוע", 1.375], ["3", "3–4 בשבוע", 1.55], ["5", "5+ בשבוע", 1.725]];
+  var OGOAL = [["lose", "ירידה במשקל", "📉", -450], ["keep", "שמירה על המשקל", "⚖️", 0], ["gain", "עלייה במסה", "💪", 250]];
+  function onbData() {
+    // always starts blank: a profile that was never saved holds only defaults (older versions defaulted to Roei's own details)
+    if (!ui.onb) ui.onb = { name: "", sex: "", age: "", hcm: "", w: "", act: "", goal: "lose" };
+    return ui.onb;
+  }
+  // Mifflin-St Jeor BMR × activity, then the goal's adjustment; protein ~1.8–2 g/kg, fat 0.8 g/kg, carbs = the rest
+  function onbCalc(o) {
+    var w = +o.w, h = +o.hcm, a = +o.age, bmr = 10 * w + 6.25 * h - 5 * a + (o.sex === "f" ? -161 : 5);
+    var act = (OACT.filter(function (x) { return x[0] === o.act; })[0] || OACT[0])[2], tdee = bmr * act;
+    var adj = (OGOAL.filter(function (x) { return x[0] === o.goal; })[0] || OGOAL[1])[3];
+    var kcal = Math.max(o.sex === "f" ? 1300 : 1500, Math.round((tdee + adj) / 50) * 50);
+    var pr = Math.round(w * (o.goal === "keep" ? 1.8 : 2) / 5) * 5, ft = Math.round(w * 0.8 / 2) * 2, cb = Math.max(0, Math.round((kcal - pr * 4 - ft * 9) / 4 / 5) * 5);
+    return { kcal: kcal, protein: pr, carbs: cb, fat: ft, tdee: Math.round(tdee / 10) * 10 };
+  }
+  function onbErr(m) { var e = document.getElementById("oErr"); if (e) e.textContent = m || ""; }
+  function onbOpts(field, list, cls) { var o = onbData(); return '<div class="' + cls + '" role="radiogroup" data-of="' + field + '">' + list.map(function (x) { var on = String(o[field]) === x[0]; return '<button type="button" role="radio" aria-checked="' + on + '" class="' + (on ? "on" : "") + '" data-ov="' + x[0] + '">' + (x[2] && typeof x[2] === "string" ? '<span class="emoji">' + x[2] + "</span>" : "") + "<b>" + x[1] + "</b></button>"; }).join("") + "</div>"; }
+  function onbHead(step) {
+    return '<div class="ohead"><img src="icons/logo.png" alt=""><b>PLATO</b></div><div class="osteps" aria-label="שלב ' + step + ' מתוך 2"><i class="on"></i><i' + (step > 1 ? ' class="on"' : "") + '></i></div><div class="ostep">שלב ' + n(step) + " מתוך " + n(2) + "</div>";
+  }
+  function renderWelcome(step) {
+    var o = onbData(), T = THEMES[variant()];
+    if (step === 1) {
+      var fld = function (id, label, val, unit, mode, ph) { return '<label class="af onum"><span>' + label + '</span><span class="oin"><input id="' + id + '" type="number" inputmode="' + mode + '" value="' + esc(String(val)) + '" placeholder="' + ph + '"><i>' + unit + "</i></span></label>"; };
+      $app.innerHTML = '<div class="onb">' + onbHead(1) + '<h1>נעים להכיר 👋</h1><p class="olead">כמה פרטים קטנים, ונחשב יעד יומי שמתאים בדיוק לך.</p>' +
+        '<div class="lcard ocard"><label class="af"><span>איך קוראים לך?</span><input id="oName" type="text" autocomplete="given-name" dir="rtl" maxlength="30" placeholder="שם פרטי" value="' + esc(o.name) + '"></label>' +
+        '<div class="af"><span>מין</span>' + onbOpts("sex", [["m", "זכר"], ["f", "נקבה"]], "oseg") + "</div>" +
+        '<div class="orow3">' + fld("oAge", "גיל", o.age, "שנים", "numeric", "30") + fld("oH", "גובה", o.hcm, "ס״מ", "numeric", "175") + fld("oW", "משקל", o.w, "ק״ג", "decimal", "75") + "</div>" +
+        '<div class="af"><span>כמה פעמים בשבוע מתאמנים?</span>' + onbOpts("act", OACT, "ochips") + "</div>" +
+        '<div class="aerr" id="oErr" role="alert"></div></div>' +
+        '<button class="btn pri onext" data-act="onbnext">המשך ליעדים ←</button></div>';
+      return;
+    }
+    var c = onbCalc(o);
+    $app.innerHTML = '<div class="onb">' + onbHead(2) + '<h1>היעדים שלך 🎯</h1><p class="olead">' + esc(o.name) + ", מה המטרה? חישבנו לפי הפרטים שלך, ואפשר לשנות כל מספר.</p>" +
+      onbOpts("goal", OGOAL, "ogoal") +
+      '<div class="lcard otd"><div class="otk"><b id="oKcal">' + n(fmt(c.kcal)) + '</b><span>קלוריות ליום</span></div><p>שריפה יומית משוערת: ' + n(fmt(c.tdee)) + ' קלוריות<br><small>חישוב לפי גיל, גובה, משקל ואימונים</small></p></div>' +
+      '<div class="card ogf goals">' + goalField("gK", "קלוריות", c.kcal, "ליום", 50, T.kcal) + goalField("gP", "חלבון", c.protein, "ג׳", 5, T.protein) + goalField("gC", "פחמימה", c.carbs, "ג׳", 5, T.carbs) + goalField("gF", "שומן", c.fat, "ג׳", 2, T.fat) +
+      '<p class="hint calc" id="gCalc"></p></div>' +
+      '<button class="btn pri onext" data-act="onbdone">סיום · יאללה לאכול 🍽️</button><button class="back oback" data-act="onbback">→ חזרה לפרטים</button></div>';
+    goalCalc();
+  }
+  function onbPick(el) {
+    var g = el.closest("[data-of]"); if (!g || !ui.onb) return;
+    var f = g.getAttribute("data-of"); ui.onb[f] = el.getAttribute("data-ov"); onbErr("");
+    g.querySelectorAll("[data-ov]").forEach(function (b) { b.classList.toggle("on", b === el); b.setAttribute("aria-checked", b === el); });
+    if (f === "goal") {
+      var c = onbCalc(ui.onb);
+      [["gK", c.kcal], ["gP", c.protein], ["gC", c.carbs], ["gF", c.fat]].forEach(function (x) { var i = document.getElementById(x[0]); if (i) i.value = x[1]; });
+      var k = document.getElementById("oKcal"); if (k) k.innerHTML = n(fmt(c.kcal)); goalCalc();
+    }
+  }
+  function onbNext() {
+    var o = onbData(); o.name = (o.name || "").trim();
+    var age = +o.age, h = +o.hcm, w = parseFloat(o.w);
+    if (!o.name) return onbErr("רק שם, כדי שנדע איך לפנות אליך");
+    if (!o.sex) return onbErr("צריך לבחור מין (משפיע על חישוב הקלוריות)");
+    if (!(age >= 13 && age <= 100)) return onbErr("גיל בין 13 ל־100");
+    if (!(h >= 120 && h <= 230)) return onbErr("גובה בסנטימטרים, למשל 175");
+    if (!(w >= 30 && w <= 300)) return onbErr("משקל בקילוגרמים, למשל 75");
+    if (!o.act) return onbErr("כמה פעמים בשבוע מתאמנים? אפשר גם 'לא מתאמנים'");
+    o.ok1 = true; go("#/welcome/2");
+  }
+  function onbDone() {
+    var o = onbData(), v = function (id) { return Math.round(parseFloat(document.getElementById(id).value) || 0); };
+    var g = { kcal: v("gK"), protein: v("gP"), carbs: v("gC"), fat: v("gF") };
+    if (g.kcal < 800) return toast("יעד הקלוריות נמוך מדי");
+    var w = Math.round(parseFloat(o.w) * 10) / 10;
+    S.setProfile({ name: o.name, sex: o.sex, age: +o.age, height: Math.round(+o.hcm) / 100, weight: w, activity: o.act });
+    S.addWeight(w);
+    S.setGoal(g); S.setPrefs({ onboarded: true, goalType: o.goal });
+    var hi = (o.sex === "f" ? "ברוכה הבאה" : "ברוך הבא") + " ל־PLATO, " + o.name + " 🌱"; ui.onb = null; location.replace("#/"); route(); toast(hi);
   }
   function sheetApp() {
     openSheet(head("אפליקציה", "📱") + '<div class="sh-body"><div class="frow"><span>גרסה</span><span class="vv">' + n("v" + APP_VERSION) + '</span></div><div class="frow"><span>הנתונים</span><span class="vv">' + (window.Cloud && Cloud.session() ? "בטלפון + בענן" : "נשמרים בטלפון הזה") + '</span></div></div>' +
@@ -1140,6 +1218,9 @@
       var a = el.getAttribute("data-act");
       switch (a) {
         case "close": closeSheet(); return;
+        case "onbnext": onbNext(); return;
+        case "onbback": go("#/welcome/1"); return;
+        case "onbdone": onbDone(); return;
         case "settings": go("#/settings"); return;
         case "home": go("#/"); return;
         case "newmeal": sheetNewMeal(); return;
@@ -1214,7 +1295,7 @@
         case "dbclear": ui.dbQ = ""; renderDB(); return;
         case "delcustom": if (!arm(el, "cus" + el.getAttribute("data-id"))) return; S.deleteCustom(el.getAttribute("data-id")); loadIngredients(); closeSheet(); renderDB(); toast("המרכיב נמחק"); return;
         case "saveprofile":
-          S.setProfile({ name: document.getElementById("pName").value.trim() || "רועי", height: parseFloat(document.getElementById("pH").value) || 0, age: parseInt(document.getElementById("pA").value, 10) || 0 });
+          S.setProfile({ name: document.getElementById("pName").value.trim() || S.profile().name, height: parseFloat(document.getElementById("pH").value) || 0, age: parseInt(document.getElementById("pA").value, 10) || 0 });
           closeSheet(); renderSettings(); toast("הפרופיל נשמר"); return;
         case "savegoal":
           var gv = function (id) { return Math.max(0, Math.round(parseFloat(document.getElementById(id).value) || 0)); };
@@ -1230,7 +1311,8 @@
         case "resendcode": var oq = otpPending(); if (!oq) { renderLogin(); return; } if (otpLeft()) { paintResend(); return; }
           el.disabled = true; sendCode(oq.email, true).catch(function (e) { paintResend(); authErr(e.message || "לא הצלחתי לשלוח קוד"); }); return;
         case "syncnow": Cloud.syncNow().then(function () { var c2 = Cloud.status(); toast(c2.state === "ok" ? "מסונכרן ✓" : syncText(c2)); }); return;
-        case "logout": if (!arm(el, "logout")) return; Cloud.signOut().then(function () { closeSheet(); renderSettings(); toast("התנתקת · הנתונים נשארו שמורים"); }); return;
+        // v13: sign-out wipes this account's data from the device (it stays in the cloud) and reloads clean at the login screen
+        case "logout": if (!arm(el, "logout")) return; Cloud.signOut().then(function () { closeSheet(); draft = null; ui.onb = null; location.replace(location.pathname + location.search + "#/login"); location.reload(); }); return;
         case "rmphoto": setPhoto(null); toast("התמונה הוסרה"); return;
       }
     }
@@ -1240,6 +1322,7 @@
     }
     if ((el = t.closest("[data-meal]"))) { sheetMeal(el.getAttribute("data-meal"), el.getAttribute("data-key")); return; }
     if ((el = t.closest("[data-open]"))) { var o = el.getAttribute("data-open"); if (o === "profile") sheetProfile(); else if (o === "goal") sheetGoal(); else if (o === "account") sheetAccount(); else sheetApp(); return; }
+    if ((el = t.closest("[data-ov]"))) { onbPick(el); return; }
     if ((el = t.closest("[data-gstep]"))) { var gi = document.getElementById(el.getAttribute("data-g")); gi.value = Math.max(0, (parseFloat(gi.value) || 0) + parseFloat(el.getAttribute("data-gstep"))); goalCalc(); return; }
     if ((el = t.closest("[data-go]"))) { closeSheet(); go(el.getAttribute("data-go")); return; }
     if ((el = t.closest("[data-dbcat]"))) { ui.dbCat = el.getAttribute("data-dbcat"); refreshDB(); return; }
@@ -1290,6 +1373,7 @@
     if (ev.target.id === "aCode") { var cv = ev.target.value.replace(/\D/g, "").slice(0, 10); if (cv !== ev.target.value) ev.target.value = cv; authErr(""); return; }
     if (ev.target.id === "dbq") { ui.dbQ = ev.target.value; refreshDB(); return; }
     if (/^g[KPCF]$/.test(ev.target.id)) { goalCalc(); return; }
+    if (/^o(Name|Age|H|W)$/.test(ev.target.id) && ui.onb) { ui.onb[{ oName: "name", oAge: "age", oH: "hcm", oW: "w" }[ev.target.id]] = ev.target.value; onbErr(""); return; }
     if (ev.target.id === "q" && draft) {
       draft.q = ev.target.value;
       var cb = document.querySelector(".search .clr"); if (cb) cb.hidden = !draft.q;
@@ -1377,7 +1461,7 @@
   applyTheme(); fabInit();
   if (location.hash.indexOf("#/build") === 0) location.hash = "#/";
   if (window.Cloud && Cloud.enabled()) {
-    Cloud.init({ imgGet: imgGet, imgPut: imgPut, onChange: onCloudChange, onStatus: onSyncStatus });
+    Cloud.init({ imgGet: imgGet, imgPut: imgPut, clearImages: imgClear, onChange: onCloudChange, onStatus: onSyncStatus });
     if (Cloud._landing) Cloud._landing.then(function () { route(); toast("המייל אושר · מחובר ☁️"); });
     else if (!Cloud.mode() && !/access_token=/.test(location.hash)) location.hash = "#/login";
   }

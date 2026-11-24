@@ -99,8 +99,16 @@
     if (!navigator.onLine) { setSync({ state: "offline" }); return Promise.resolve(); }
     busy = true; setSync({ state: "syncing" });
     var uid = sess().user.id, changed = false;
+    if (S.owner() && S.owner() !== uid) S.freshFor(uid);   // v13 safety: never push one account's local data into another account's row
     return pullDoc().then(function (row) {
-      var local = S.raw(), merged = row ? S.merge(local, row.doc) : local;
+      var local = S.raw(), merged;
+      if (local.fresh) {   // v13: first sync of a login: the account's cloud copy is the base (it wins every tie); only what was added since login is merged in
+        delete local.fresh;
+        if (row) { S.applyMerged(row.doc, uid); var mine = local; local = S.raw(); merged = S.merge(local, mine); S.applyMerged(merged, uid); }
+        else S.applyMerged(local, uid);
+        changed = true; local = S.raw();
+      }
+      merged = row ? S.merge(local, row.doc) : local;
       if (JSON.stringify(merged) !== JSON.stringify(local) || local.owner !== uid) { S.applyMerged(merged, uid); changed = row ? true : changed; }
       var need = sync().dirty || !row || JSON.stringify(row.doc) !== JSON.stringify(stripOwner(S.raw()));
       return (need ? pushDoc(S.raw()) : Promise.resolve()).then(function () { return syncPhotos(S.raw()); });
@@ -116,12 +124,14 @@
 
   // ---------- auth flows ----------
   function afterLogin(se) {
-    // another account's data on this device? keep a backup and start from that account's cloud copy instead of mixing
+    // v13: each email = its own data. Unless this device already holds THIS account's data, start empty and take the account's
+    // cloud copy as is (a brand-new account stays empty → welcome flow). Whatever was here before is never uploaded to it;
+    // a non-empty previous state is kept only as an on-device backup (never shown, never synced).
     var owner = S.owner();
-    if (owner && owner !== se.user.id) {
-      try { localStorage.setItem("plato-v1-backup-" + owner, JSON.stringify(S.raw())); } catch (e) {}
-      var fresh = S.raw(); fresh.days = {}; fresh.dishes = []; fresh.customIngredients = []; fresh.fixes = []; fresh.weights = []; fresh.overrides = {}; fresh.usage = {}; fresh.deleted = {}; fresh.stamps = {};
-      S.applyMerged(fresh, se.user.id);
+    if (owner !== se.user.id) {
+      if (S.hasData()) { try { localStorage.setItem("plato-v1-backup-" + (owner || "local"), JSON.stringify(S.raw())); } catch (e) {} }
+      if (hooks.clearImages) hooks.clearImages();
+      S.freshFor(se.user.id);
     }
     localStorage.setItem(MKEY, "cloud"); setSync({ dirty: true, state: "syncing", photos: {} });
     return run("login").then(function () { return se; });
@@ -166,7 +176,8 @@
     },
     signOut: function () {
       var se = sess(), p = se ? run("logout").catch(function () {}).then(function () { return api("/auth/v1/logout", { method: "POST", headers: { Authorization: "Bearer " + se.access_token } }).catch(function () {}); }) : Promise.resolve();
-      return p.then(function () { jset(AKEY, null); jset(SKEY, null); localStorage.setItem(MKEY, "local"); hooks.onStatus(status()); });
+      // v13: signing out removes this account's data from the device (it stays in the cloud) so the next person starts clean
+      return p.then(function () { jset(AKEY, null); jset(SKEY, null); localStorage.removeItem(MKEY); S.wipe(); if (hooks.clearImages) hooks.clearImages(); hooks.onStatus(status()); });
     },
     syncNow: function () { return run("manual"); },
     // v11: label scan through the plato-label Edge Function (the Gemini key stays server-side). Rejects with e.code:

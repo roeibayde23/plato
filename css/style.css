@@ -659,3 +659,42 @@ input.fromlabel{color:#2F5F2C}
 .dvacts{display:flex;justify-content:center;gap:26px;margin-top:10px}
 .dvacts .lnk{display:inline-flex;align-items:center;gap:5px;font:700 14px Assistant;color:var(--brd)}
 .dvacts .lnk svg{width:17px;height:17px}.dvacts .lnk.del{color:#9A4A33}
+
+/* ---------- v13: welcome flow (new account) ---------- */
+.onb{min-height:100dvh;padding:calc(var(--st) + 18px) 18px calc(var(--sb) + 26px);display:flex;flex-direction:column;background:radial-gradient(120% 50% at 50% 0%,#E6F0DA 0%,var(--bg) 60%)}
+.ohead{display:flex;align-items:center;justify-content:center;gap:9px}
+.ohead img{width:34px;height:34px;border-radius:11px;box-shadow:0 4px 12px rgba(46,107,42,.2)}
+.ohead b{font:800 16px Assistant;letter-spacing:5px;color:var(--gd)}
+.osteps{display:flex;gap:6px;justify-content:center;margin-top:16px}
+.osteps i{width:46px;height:5px;border-radius:3px;background:var(--ln)}
+.osteps i.on{background:var(--g)}
+.ostep{text-align:center;font:700 12.5px Assistant;color:var(--mut);margin-top:7px}
+.onb h1{font:700 29px "Frank Ruhl Libre";color:var(--brd);margin-top:14px;text-align:center}
+.olead{text-align:center;font:500 15px/1.45 Assistant;color:var(--mut);margin:4px 8px 14px}
+.ocard{display:flex;flex-direction:column;gap:14px;padding:16px}
+.ocard .af input{text-align:right}
+.oseg{display:flex;gap:8px}
+.oseg button,.ochips button{flex:1;height:46px;border:1.5px solid var(--ln);border-radius:13px;background:#FFFDF8;font:600 15.5px Assistant;color:var(--brd);transition:background .15s,border-color .15s}
+.oseg button.on,.ochips button.on{border-color:var(--g);background:var(--gl);color:var(--gd);font-weight:700;box-shadow:inset 0 0 0 1px var(--g)}
+.ochips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ochips button{font-size:14.5px}
+.orow3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.oin{position:relative;display:block}
+.onum .oin input{text-align:center;padding:0 6px 14px;font-size:18px}
+.oin i{position:absolute;bottom:6px;left:0;right:0;text-align:center;font:600 11px Assistant;color:var(--faint);font-style:normal;pointer-events:none}
+.onext{margin-top:18px}
+.onb .aerr:empty{display:none}
+.ogoal{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.ogoal button{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;border:1.5px solid var(--ln);border-radius:16px;background:var(--paper);font:600 16.5px Assistant;color:var(--brd);text-align:right}
+.ogoal button .emoji{font-size:22px}
+.ogoal button.on{border-color:var(--g);background:var(--gl);color:var(--gd);box-shadow:inset 0 0 0 1px var(--g)}
+.ogoal button.on::after{content:"✓";margin-right:auto;font-weight:800;color:var(--g)}
+.otd{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-bottom:12px}
+.otk{display:flex;flex-direction:column;align-items:center;min-width:96px;padding-left:14px;border-left:1px solid var(--ln)}
+.otk b{font:800 30px Assistant;color:var(--t-kcal)}
+.otk>span{font:600 12px Assistant;color:var(--mut)}
+.otd p{font:600 14px/1.45 Assistant;color:var(--brd)}
+.otd small{font-weight:500;color:var(--mut);font-size:12.5px}
+.onb .card.ogf{margin:0}
+.oback{align-self:center;margin-top:12px;padding:10px 16px}
+.onb input::placeholder{color:#CDC2AE;font-weight:500}

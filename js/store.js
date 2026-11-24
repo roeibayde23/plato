@@ -21,18 +21,15 @@
     return {
       schema: SCHEMA,
       userId: "local",
-      profile: { name: "רועי", weight: 82, height: 1.8, age: 26, photo: null },
+      profile: { name: "", sex: "", weight: 0, height: 0, age: 0, activity: "", photo: null },   // v13: neutral — a new user fills this in the welcome flow (it used to be Roei's details)
       goal: defaultGoal(),
       days: {},            // "YYYY-MM-DD" -> { meals: [ {id,type,createdAt,items:[snapshot],totals} ] }
-      dishes: [
-        { id: "dish_toast_cheese", name: "טוסט גבינה צהובה", items: [{ ingId: "tesco_toast_wheat", mode: "u", qty: 2 }, { ingId: "madeland_fit_20", mode: "u", qty: 2 }] },
-        { id: "dish_cornies_cheese", name: "פריכיות עם גבינה", items: [{ ingId: "racio_cornies", mode: "u", qty: 3 }, { ingId: "madeland_fit_20", mode: "u", qty: 2 }] }
-      ],
+      dishes: [],          // v13: no starter dishes (they were Roei's own products)
       customIngredients: [],
       fixes: [],           // owner-only fix list: {id,text,done,createdAt}
       weights: [],         // weight history: {id,date:"YYYY-MM-DD",kg,at} (one per day, sorted by date)
       overrides: {},       // v3: edits to built-in (Aki) ingredients: id -> {userId, per_100g, unit, updatedAt}
-      prefs: { homeVariant: "B", tip: { date: "", hidden: false, rot: 0 } },
+      prefs: { homeVariant: "B", tip: { date: "", hidden: false, rot: 0 }, onboarded: false },
       stamps: {},          // v8: section -> ms of last change (profile, goal, prefs)
       deleted: {},         // v8: tombstones "kind:id" -> ms, so a delete on one device wins over an older copy elsewhere
       usage: {},           // learning order: key (ingredient id or "dish:"+id) -> {n: decayed count, last: ms}
@@ -199,6 +196,14 @@
     // replace local state with a merged document without firing onSave (the sync engine pushes it itself)
     applyMerged: function (doc, owner) { quiet++; try { var s = migrate(clone(doc)); if (owner) { s.userId = owner; s.owner = owner; } state = s; syncWeight(); save(); } finally { quiet--; } },
     owner: function () { return st().owner || null; },
+    // v13: per-account data. A login of another account (or of an account on a device holding local data) starts from an
+    // empty state that is only ever *replaced* by that account's cloud copy — local data is never merged into/uploaded to it.
+    freshFor: function (owner) { quiet++; try { var s = defaults(); s.userId = owner; s.owner = owner; s.fresh = true; state = s; save(); } finally { quiet--; } },
+    isFresh: function () { return !!st().fresh; },
+    wipe: function () { quiet++; try { try { localStorage.removeItem(KEY); } catch (e) {} state = defaults(); adapter.write(state); } finally { quiet--; } },
+    hasData: function () { var s = st(); return Object.keys(s.days).some(function (k) { return s.days[k].meals.length; }) || s.dishes.length > 0 || s.customIngredients.length > 0 || s.weights.length > 1 || !!(s.profile && s.profile.name); },
+    // new user: never finished the welcome flow and never set a profile or goals (Roei's row has a goal stamp → skips it)
+    needsOnboard: function () { var s = st(); return !s.fresh && !(s.prefs && s.prefs.onboarded) && !(s.stamps && (s.stamps.goal || s.stamps.profile)); },
     exportJSON: function () { return JSON.stringify({ app: "PLATO", exportedAt: new Date().toISOString(), data: st() }, null, 2); },
     importJSON: function (text) {
       var o = JSON.parse(text);
