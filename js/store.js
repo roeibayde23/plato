@@ -154,6 +154,10 @@
     addDish: function (name, items) { var d = { id: uid(), userId: st().userId, name: name, items: items, u: now() }; st().dishes.push(d); save(); return clone(d); },
     updateDish: function (id, patch) { var d = st().dishes.filter(function (x) { return x.id === id; })[0]; if (!d) return null; Object.assign(d, patch); d.u = now(); save(); return clone(d); },
     deleteDish: function (id) { st().dishes = st().dishes.filter(function (d) { return d.id !== id; }); tomb("dish", id); save(); },
+    restoreDish: function (d) {   // v10 undo: bring a deleted dish back; stamp it newer than its tombstone so sync keeps it
+      var k = "dish:" + d.id, t = st().deleted[k] || 0; delete st().deleted[k];
+      var r = clone(d); r.u = Math.max(now(), t + 1); st().dishes = st().dishes.filter(function (x) { return x.id !== d.id; }).concat([r]); save(); return clone(r);
+    },
 
     customs: function () { return clone(st().customIngredients); },
     addCustom: function (c) { c.id = "custom_" + uid(); c.userId = st().userId; c.u = now(); st().customIngredients.push(c); save(); return clone(c); },

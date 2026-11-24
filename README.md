@@ -13,6 +13,8 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
     python3 test/v5.py http://127.0.0.1:8781/          # v5 features: tips, goals, teaspoon, save effect, DB edit, day view
     python3 test/v7.py http://127.0.0.1:8781/          # v7: edit items while building, מסקנות מהיום, frequent-only list, dish photos (+ WebKit)
     python3 test/v8.py http://127.0.0.1:8781/          # v8/v9: email + 6-digit code login, merge + sync with a mocked Supabase (no network)
+    python3 test/v10.py http://127.0.0.1:8781/         # v10: 🧠 floating button, insights for past days, ★ tab, green save, saved-dish edit/delete/swipe + undo
+    python3 test/v10_day.py http://127.0.0.1:8781/     # v10.2: day view (option C): numbers vs goal, meals table with what he ate, מסקנות card, compact add
     PLATO_E2E_FILE=creds.json python3 test/v8_real.py  # real Supabase e2e with a throwaway, pre-confirmed account (OTP calls stubbed, no mail sent; delete it afterwards)
 Screenshots go to `shots/`.
 

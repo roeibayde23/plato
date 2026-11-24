@@ -525,3 +525,95 @@ body.nofab #tipfab{display:none}
 .syncst.offline,.syncst.error,.syncst.signedout{color:#9A4A33}.syncst.offline::before{content:"○ "}
 .acct .note{font-size:13px;color:var(--mut);line-height:1.5;padding:12px 14px 4px;border-top:1px solid var(--ln)}
 .acct .vv[dir=ltr]{font-weight:600}
+
+/* ---------- v10 ---------- */
+/* 🧠 floating button: same size/style as the tip leaf, right next to it; slides with it when the leaf peeks */
+#brainfab{position:fixed;left:74px;bottom:calc(var(--sb) + 22px);z-index:45;transition:transform .45s cubic-bezier(.3,1.5,.5,1),opacity .3s,bottom .25s,border-color .2s,background .2s}
+#brainfab .emoji{font-size:27px;line-height:1}
+#brainfab:active{transform:scale(.94)}
+#tipfab.peek ~ #brainfab{transform:translateX(-46px)}
+#brainfab.lift{bottom:calc(var(--sb) + 92px)}
+#brainfab.on{background:var(--gl,#E7F0DC);box-shadow:0 0 0 3px rgba(46,107,42,.18),0 6px 16px rgba(46,107,42,.28)}
+body.sheet-open #brainfab,body.sum-open #brainfab{opacity:0;pointer-events:none}
+body.nofab #brainfab{display:none}
+/* insights: day switcher */
+.inav{padding:2px 12px 0}
+.inav h1{font-size:23px;white-space:nowrap}
+.inav .ib:disabled{opacity:.3}
+.ichips{display:flex;justify-content:center;gap:8px;margin:8px 18px 4px}
+.ichip{font:600 13.5px Assistant;color:var(--mut);background:var(--paper);border:1px solid var(--ln);border-radius:999px;padding:5px 13px}
+.ichip.on{color:#fff;background:var(--g);border-color:var(--g)}
+/* build: ★ tab, "נפוץ" without a star */
+.seg [data-tab=saved]{font-size:16px;line-height:1.1;color:#C79A1E}
+.seg [data-tab=saved].on{color:#C79A1E}
+.dv.fav::before{content:none}
+/* saved bookmark → green when the meal is saved as a dish */
+.rb.save.on{background:var(--g);border-color:var(--g);color:#fff}
+/* saved dish rows: tap = add, ✏️ edit, 🗑 delete, swipe left to delete */
+.dsw{position:relative;overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.dsw img{-webkit-user-drag:none}
+.dswbg{position:absolute;inset:0;background:#B5533A;color:#fff;display:flex;align-items:center;justify-content:flex-start;gap:6px;padding:0 20px;font:700 14px Assistant;opacity:0;transition:opacity .15s}
+.dsw.swiping .dswbg,.dsw.gone .dswbg{opacity:1}
+.dsw .r4{position:relative;background:var(--bg);transition:transform .22s ease;cursor:pointer;gap:10px;padding:8px 12px 8px 10px}
+.dsw.swiping .r4{transition:none}
+.dsw.far .dswbg{background:#9A3B25}
+.dsw.gone{max-height:0!important;transition:max-height .22s ease .12s}
+.dsw.gone .r4{transform:translateX(-110%)!important}
+.dacts{display:flex;flex-direction:column;gap:4px;flex:0 0 auto}
+.dact{width:30px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--mut);border:1px solid var(--ln);background:var(--paper)}
+.dact.ed{color:var(--gd)}
+.dact.del{color:#9A4A33}
+.r4.dish.added{background:var(--gl,#EEF4E6)}
+#toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:8px 8px 8px 16px}
+#toast .tact{color:#F3D98B;font:700 14px Assistant;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.1)}
+/* leave room under the content for the two floating buttons */
+.set,.home{padding-bottom:calc(var(--sb) + 96px)}
+/* v10.1: insights header = title 'מסקנות' + weekday/date subtitle */
+.inav .ititle{flex:1;text-align:center;min-width:0}
+.inav .ititle h1{font-size:28px;padding:0;line-height:1.15}
+.inav .isub{font:600 15px Assistant;color:var(--mut);margin-top:2px}
+#brainfab[hidden]{display:none}
+
+/* ---------- v10.2: day view = Roei's option C (numbers first, meals table, מסקנות teaser) ---------- */
+.dayc .card{margin:12px 18px 0;background:var(--paper);border:1px solid var(--ln);border-radius:18px}
+.dsum{padding:4px 14px 6px}
+.drow{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"l v s" "b b b";align-items:baseline;column-gap:10px;padding:6px 0 6px}
+.drow+.drow{border-top:1px dashed var(--ln)}
+.drow .dl{grid-area:l;display:flex;align-items:center;gap:6px;font:600 14px Assistant;color:var(--brd);min-width:62px}
+.drow .dl i{width:8px;height:8px;border-radius:50%}
+.drow .dv2{grid-area:v;text-align:right;unicode-bidi:isolate}
+.drow .dv2 b{font:700 21px "Frank Ruhl Libre";color:var(--brd)}
+.drow .dv2 small{font:500 14px Assistant;color:var(--mut)}
+.drow.dk .dv2 b{font-size:25px;color:var(--t-kcal)}
+.drow .ds{grid-area:s;font:700 13.5px Assistant;white-space:nowrap}
+.ds.over,.ds.short{color:#9A4A33}.ds.ok{color:var(--gd)}.ds.left{color:var(--mut)}
+.drow .dbar{grid-area:b;height:4px;border-radius:2px;background:#E7DFCF;overflow:hidden;margin-top:5px}
+.drow.dk .dbar{height:6px;border-radius:3px}
+.drow .dbar i{display:block;height:100%;border-radius:inherit}
+.dtab{padding:2px 12px 2px}
+.dth,.dmr{display:grid;grid-template-columns:1fr 50px 40px 40px 38px 26px;align-items:center;column-gap:2px}
+.dth{font:600 11.5px Assistant;color:var(--mut);padding:9px 0 6px;border-bottom:1px solid var(--ln);text-align:center}
+.dth span:first-child{text-align:right}
+.dmr{width:100%;text-align:center;padding:8px 0 7px;border-bottom:1px dashed var(--ln);row-gap:3px}
+.dmr:last-child{border-bottom:0}
+.dmr:active{background:#F3EDE1}
+.dmn{display:flex;align-items:center;gap:5px;text-align:right;min-width:0;white-space:nowrap}
+.dmn .emoji{font-size:14px}
+.dmn b{font:700 15px "Frank Ruhl Libre";color:var(--brd)}
+.dmn small{font:500 11px Assistant;color:var(--mut)}
+.dmn em{font:600 10.5px Assistant;font-style:normal;color:var(--br);background:var(--brl);border-radius:999px;padding:0 6px}
+.dkc{font:700 16px "Frank Ruhl Libre";color:var(--t-kcal)}
+.dpr,.dcb,.dft{font:700 13.5px Assistant;font-variant-numeric:tabular-nums}
+.dpr{color:var(--c-pro)}.dcb{color:var(--c-carb)}.dft{color:var(--t-fat)}
+.dpen{width:24px;height:24px;border-radius:8px;border:1px solid var(--ln);display:inline-flex;align-items:center;justify-content:center;color:var(--gd);justify-self:end}
+.dpen svg{width:13px;height:13px}
+.dit{grid-column:1/-1;text-align:right;font-size:12.5px;line-height:1.4;color:var(--mut);padding-right:21px}
+.dtease{display:flex;align-items:center;gap:10px;width:calc(100% - 36px);padding:10px 13px;background:#FBF3E2!important;border-color:#EAD9B5!important;text-align:right}
+.dtease .tx{flex:1;font-size:12.5px;line-height:1.4;color:var(--brd)}
+.dtease .tx b{display:block;font:700 15px "Frank Ruhl Libre";margin-bottom:1px}
+.dtease .tx b small{font:600 11.5px Assistant;color:#8A6410}
+.dtease .go{font:700 12.5px Assistant;color:var(--gd);white-space:nowrap}
+.dadd{display:flex;justify-content:center;margin:14px 18px 0}
+.btn-sm{display:inline-flex;align-items:center;gap:4px;height:38px;padding:0 16px;border-radius:999px;border:1.5px solid var(--g);background:var(--paper);color:var(--gd);font:700 14.5px Assistant}
+.btn-sm:active{background:var(--gl)}
+.dayc .empty-card{margin:12px 18px 0}

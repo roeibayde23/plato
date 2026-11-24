@@ -13,9 +13,11 @@
   function fmt(x) { return Math.round(x).toLocaleString("en-US"); }
   function r1(x) { return x >= 10 ? Math.round(x) : Math.round(x * 10) / 10; }
   function r0(x) { return x >= 1 ? Math.round(x) : Math.round(x * 10) / 10; }
-  function toast(msg) {
-    var t = document.getElementById("toast"); t.textContent = msg; t.classList.add("show");
-    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); }, 2000);
+  function toast(msg, act, onAct, ms) {   // v10: optional action button (e.g. "ביטול" to undo a delete)
+    var t = document.getElementById("toast"); t.textContent = msg; t.classList.toggle("act", !!act);
+    if (act) { var b = document.createElement("button"); b.className = "tact"; b.textContent = act; b.onclick = function (e) { e.stopPropagation(); clearTimeout(toast._t); t.classList.remove("show"); onAct(); }; t.appendChild(b); }
+    t.classList.add("show");
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove("show"); if (toast._done) { var f = toast._done; toast._done = null; f(); } }, ms || 2000);
   }
   var ICON = {
     trash: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg>',
@@ -26,6 +28,8 @@
     chevL: '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
     chevUp: '<svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 15l6-6 6 6"/></svg>',
     check: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    bookOn: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>',
+    pencil: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
     book: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>',
     plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
@@ -51,7 +55,7 @@
   }
 
   // ---------- ingredients ----------
-  var CATS = [["saved", "שמורות"], ["protein", "חלבון"], ["carb", "פחמימה"], ["fat", "שומן"], ["vegetable", "ירקות"], ["fruit", "פירות"], ["other", "אחר"]];
+  var CATS = [["saved", "★"], ["protein", "חלבון"], ["carb", "פחמימה"], ["fat", "שומן"], ["vegetable", "ירקות"], ["fruit", "פירות"], ["other", "אחר"]];
   var CAT_LABEL = { protein: "חלבון", carb: "פחמימה", fat: "שומן", vegetable: "ירקות", fruit: "פירות", other: "אחר" };
   var ESTIMATE = { asam_sweet_chili: 1, sweet_corn_canned_usda: 1, rice_paper: 1, whey_protein_powder: 1 };
   var BAD_UNIT = /^(כוס|חצי כוס|רבע כוס|אריזה|גביע|מנה|קערת|קופסה)/;
@@ -212,7 +216,7 @@
       '<div class="home">' +
       '<div class="hd"><img src="icons/logo.png" alt=""><b>PLATO</b><span class="date">יום ' + DAYNAME[now.getDay()] + " · " + now.getDate() + " " + MONTHS[now.getMonth()] + '</span><button class="gear" data-act="menu" aria-label="תפריט" title="תפריט" aria-haspopup="true">' + ICON.menu + "</button></div>" +
       homeRings(t, g, cel ? cel.before : null) +
-      '<div class="sec"><b>מה אכלתי היום</b><span class="sr">' + (day.meals.length ? n(day.meals.length) + (day.meals.length === 1 ? " ארוחה" : " ארוחות") : "") + insEntry(S.dateKey(now), "home") + "</span></div>" +
+      '<div class="sec"><b>מה אכלתי היום</b><span class="sr">' + (day.meals.length ? n(day.meals.length) + (day.meals.length === 1 ? " ארוחה" : " ארוחות") : "") + "</span></div>" +
       (meals ? '<div class="meals">' + meals + "</div>" : '<div class="empty-card">עוד לא נרשמו ארוחות היום</div>') +
       '<div class="cta"><button class="btn pri" data-act="newmeal">＋ ארוחה חדשה</button></div>' +
       weekMini(g) +
@@ -281,12 +285,20 @@
     d.innerHTML = '<div class="tippop" id="tippop" role="dialog" aria-label="טיפ אישי" hidden><p id="tiptext"></p><div class="tpb"><button data-act="tipnext">עוד טיפ ↻</button><button class="x" data-act="tipclose" aria-label="סגירה">✕</button></div></div>' +
       '<button class="fab" data-act="tipopen" aria-label="טיפ אישי"><img src="icons/logo.png" alt=""><span class="badge"></span></button>';
     document.body.appendChild(d); fab.el = d;
+    var bf = document.createElement("button"); bf.id = "brainfab"; bf.className = "fab brainfab"; bf.setAttribute("data-act", "brainfab");   // v10: 🧠 floats next to the tip leaf
+    bf.innerHTML = '<span class="emoji">🧠</span>'; document.body.appendChild(bf); fab.brain = bf;
     new MutationObserver(function () { document.body.classList.toggle("sheet-open", $sheet.children.length > 0); if ($sheet.children.length) tipClose(true); }).observe($sheet, { childList: true });
     window.addEventListener("scroll", fabPeekSoon, { passive: true });
     document.addEventListener("scroll", function (e) { if (e.target && e.target.id === "list") fabPeekSoon(); }, true);
     setInterval(fabCheck, 60000);
   }
-  function fabPlace() { if (!fab.el) return; var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
+  function brainKey() { var h = location.hash || "#/"; if (/^#\/(day|insights)\/\d{4}-\d\d-\d\d$/.test(h)) return h.split("/")[2]; if (h.indexOf("#/build") === 0 && draft) return draft.date; return S.dateKey(); }
+  function brainPlace() {
+    var bf = fab.brain; if (!bf) return; var h = location.hash || "#/", on = h.indexOf("#/insights/") === 0, k = brainKey(), x = insights(k);
+    bf.classList.toggle("lift", h.indexOf("#/build") === 0); bf.classList.toggle("on", on); bf.hidden = on || h.indexOf("#/day/") === 0;   // v10.1: no 🧠 on the insights screen itself · v10.2: nor on the day view (it has the מסקנות card) bf.classList.toggle("sofar", !on && k === S.dateKey() && !x.empty && x.partial);
+    bf.setAttribute("aria-label", on ? "סגירת מה היה טוב ומה חסר" : "מה היה טוב ומה חסר " + (k === S.dateKey() ? "היום" : "ביום הזה")); bf.title = "מה היה טוב ומה חסר";
+  }
+  function fabPlace() { if (!fab.el) return; brainPlace(); var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
   function fabOut(fresh) {
     var e = fab.el; if (!e) return; clearTimeout(fab.idle);
     e.classList.remove("peek"); e.classList.add("out"); if (fresh) { e.classList.remove("bounce2"); void e.offsetWidth; e.classList.add("bounce2", "new"); }
@@ -356,16 +368,18 @@
     var gN = x.good.length, mN = x.miss[0].indexOf("כמעט כלום") === 0 ? 0 : x.miss.length;
     return esc(x.name) + ", " + (mN === 0 ? "יום מצוין! כמעט הכל בדיוק במקום." : gN >= mN ? "יום טוב בסך הכל — הנה מה שלמדנו ממנו." : "היו דברים טובים, ויש על מה לעבוד מחר. ככה מתקדמים.");
   }
-  function insEntry(key, where) {   // v7.2: icon-only 🧠 button (no text label), quiet, same look day and evening
-    var x = insights(key); if (x.empty) return "";
-    return '<button class="brain' + (x.partial ? " sofar" : "") + '" data-go="#/insights/' + key + '" aria-label="מה היה טוב ומה חסר ' + (key === S.dateKey() ? "היום" : "ביום הזה") + '" title="מה היה טוב ומה חסר"><span class="emoji">🧠</span></button>';
-  }
   function dateHead(key) { var p = key.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]); return "יום " + DAYNAME[d.getDay()] + ", " + d.getDate() + "." + (d.getMonth() + 1); }
   function renderInsights(key) {
     var x = insights(key), today = key === S.dateKey();
     var sec = function (cls, ic, title, arr) { return '<div class="card ins ' + cls + '"><div class="ih"><span class="emoji">' + ic + "</span><b>" + title + "</b></div><ul>" + arr.map(function (l) { return "<li>" + l + "</li>"; }).join("") + "</ul></div>"; };
-    var back = today && (ui.prevHash || "").indexOf("#/day/") !== 0 ? '<button class="back" data-act="home">→ חזרה</button>' : '<button class="back" data-go="#/day/' + key + '">→ ' + dayLabel(key) + "</button>";
-    $app.innerHTML = '<div class="set insp">' + back + "<h1><span class=\"emoji\">🧠</span> " + dateHead(key) + "</h1>" + (x.partial && !x.empty ? '<div class="sofar">⏳ עד עכשיו · מתעדכן לאורך היום</div>' : "") + '<p class="lead">' + insHead(x, key) + "</p>" +
+    if ((ui.prevHash || "").indexOf("#/insights/") !== 0) ui.insFrom = ui.prevHash || "#/";   // v10: remember where he came from while switching days
+    var fr = ui.insFrom || "#/";
+    var back = fr.indexOf("#/day/") === 0 ? '<button class="back" data-go="#/day/' + key + '">→ ' + dayLabel(key) + "</button>" : fr.indexOf("#/build") === 0 && draft ? '<button class="back" data-go="#/build">→ חזרה לארוחה</button>' : '<button class="back" data-act="home">→ חזרה</button>';
+    var tk = S.dateKey(), yk = shiftKey(tk, -1), wk = shiftKey(tk, -7);
+    var chip = function (k, label) { return '<button class="ichip' + (k === key ? " on" : "") + '" data-go="#/insights/' + k + '"' + (k === key ? ' aria-current="date"' : "") + ">" + label + "</button>"; };
+    var nav = '<div class="dnav inav"><button class="ib" data-go="#/insights/' + shiftKey(key, -1) + '" aria-label="יום קודם">' + ICON.chevR + "</button><div class=\"ititle\"><h1>מסקנות</h1><div class=\"isub\">" + dateHead(key) + '</div></div><button class="ib" data-go="#/insights/' + shiftKey(key, 1) + '" aria-label="יום הבא"' + (key >= tk ? " disabled" : "") + ">" + ICON.chevL + "</button></div>" +
+      '<div class="ichips">' + chip(tk, "היום") + chip(yk, "אתמול") + chip(wk, "לפני שבוע") + "</div>";
+    $app.innerHTML = '<div class="set insp">' + back + nav + (today && x.partial && !x.empty ? '<div class="sofar">⏳ עד עכשיו · מתעדכן לאורך היום</div>' : "") + '<p class="lead">' + insHead(x, key) + "</p>" +
       (x.empty ? '<div class="empty-card">כשיהיו ארוחות רשומות — יופיע כאן מה היה טוב ומה חסר</div>' :
         sec("good", "✅", "מה היה טוב", x.good) + sec("miss", "⚠️", "מה חסר", x.miss) + sec("focus", "🎯", "על מה לשים דגש", x.focus)) +
       '<div class="cta"><button class="btn sec2" data-go="#/day/' + key + '">לפירוט הארוחות</button></div></div>';
@@ -379,21 +393,41 @@
     return "יום " + DAYNAME[d.getDay()] + " · " + d.getDate() + " " + MONTHS[d.getMonth()];
   }
   function shiftKey(key, n2) { var p = key.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2] + n2); return S.dateKey(d); }
-  function renderDay(key) {
+  function renderDay(key) {   // v10.2 (Roei's pick, option C): numbers first · meals table with what he ate · מסקנות teaser · compact add
     var g = S.goal(), day = S.day(key), t = day.totals, today = S.dateKey(), T = THEMES[variant()];
-    var macro = function (label, color, v, goal) { var pct = Math.min(100, Math.round(v / Math.max(1, goal) * 100)); return '<div class="mc"><div class="t"><span class="dot" style="background:' + color + '"></span>' + label + '</div><div class="v">' + n(Math.round(v)) + "<small> / " + n(goal) + ' ג׳</small></div><div class="bar"><i style="width:' + pct + "%;background:" + color + '"></i></div></div>'; };
-    var groups = MEALS.map(function (M) {
-      var ms = day.meals.filter(function (m) { return m.type === M.id; }); if (!ms.length) return "";
-      return '<div class="dg"><div class="dgh"><span class="emoji">' + M.ic + "</span><b>" + M.title + "</b><span>" + n(fmt(tot(ms.map(function (m) { return m.totals; })).kcal)) + " קלוריות</span></div>" +
-        ms.map(function (m) { var tm = new Date(m.createdAt); return '<button class="ml" data-meal="' + m.id + '" data-key="' + key + '"><span class="t"><b>' + m.items.map(function (i) { return i.name.split(",")[0]; }).join(" · ") + "</b><span>" + n(Math.round(m.totals.protein)) + " ג׳ חלבון · " + n(Math.round(m.totals.carbs)) + " פחמ׳ · " + n(Math.round(m.totals.fat)) + " שומן" + (m.editedAt ? " · נערך" : "") + '</span></span><span class="k"><b class="n">' + fmt(m.totals.kcal) + "</b><span>✏️ עריכה</span></span></button>"; }).join("") + "</div>";
+    var gram = " ג׳";
+    var row = function (cls, label, color, v, goal, unit, isPro) {
+      v = Math.round(v); var d = v - goal, near = Math.abs(d) <= Math.max(goal * 0.05, isPro ? 5 : 0), st, sc;
+      if (near) { st = "ביעד ✓"; sc = "ok"; }
+      else if (d > 0) { st = "+" + n(fmt(d)) + (unit ? "" : "") + " מעל"; sc = isPro ? "ok" : "over"; }
+      else if (isPro) { st = "חסרו " + n(fmt(-d)) + unit; sc = "short"; }
+      else { st = "נשארו " + n(fmt(-d)) + unit; sc = "left"; }
+      var pct = Math.min(100, v / Math.max(1, goal) * 100);
+      return '<div class="drow ' + cls + '"><span class="dl"><i style="background:' + color + '"></i>' + label + '</span><span class="dv2" dir="ltr"><b>' + fmt(v) + '</b><small> / ' + fmt(goal) + unit + '</small></span><span class="ds ' + sc + '">' + st + '</span>' +
+        '<span class="dbar"><i style="width:' + pct.toFixed(0) + "%;background:" + color + '"></i></span></div>';
+    };
+    var meals = day.meals.slice().sort(function (x, y) { return x.createdAt - y.createdAt; });
+    var hm = function (ts) { var d = new Date(ts); return d.getHours() + ":" + ("0" + d.getMinutes()).slice(-2); };
+    var rows = meals.map(function (m) {
+      var M = mealInfo(m.type), names = m.items.map(function (i) { return esc(i.name.split(",")[0]); }).join(" · ");
+      return '<button class="dmr" data-meal="' + m.id + '" data-key="' + key + '" aria-label="עריכת ' + esc(M.title) + '">' +
+        '<span class="dmn"><span class="emoji">' + M.ic + "</span><b>" + esc(m.type) + '</b><small class="n">' + hm(m.createdAt) + "</small>" + (m.editedAt ? '<em>נערך</em>' : "") + "</span>" +
+        '<span class="dkc n">' + fmt(m.totals.kcal) + '</span><span class="dpr n">' + Math.round(m.totals.protein) + '</span><span class="dcb n">' + Math.round(m.totals.carbs) + '</span><span class="dft n">' + Math.round(m.totals.fat) + "</span>" +
+        '<span class="dpen" aria-hidden="true">' + ICON.pencil + "</span>" +
+        '<span class="dit">' + names + "</span></button>";
     }).join("");
-    var pct = Math.round(t.kcal / Math.max(1, g.kcal) * 100);
-    $app.innerHTML = '<div class="set dayp"><button class="back" data-go="#/weekly">→ מעקב שבועי</button>' +
+    var x = insights(key), tease = "";
+    if (!x.empty) {
+      var pts = (x.miss.length && x.miss[0].indexOf("כמעט כלום") !== 0 ? x.miss : x.good).slice(0, 3);
+      tease = '<button class="card dtease" data-go="#/insights/' + key + '"><span class="tx"><b>מסקנות' + (key === today && x.partial ? ' <small>· עד עכשיו</small>' : "") + "</b>" + pts.join(" · ") + '</span><span class="go">לכל המסקנות ←</span></button>';
+    }
+    $app.innerHTML = '<div class="set dayp dayc"><button class="back" data-go="#/weekly">→ מעקב שבועי</button>' +
       '<div class="dnav"><button class="ib" data-go="#/day/' + shiftKey(key, -1) + '" aria-label="יום קודם">' + ICON.chevR + '</button><h1>' + dayLabel(key) + '</h1><button class="ib" data-go="#/day/' + shiftKey(key, 1) + '" aria-label="יום הבא"' + (key >= today ? " disabled" : "") + ">" + ICON.chevL + "</button></div>" +
-      '<div class="card dtot"><div class="dk"><b class="n">' + fmt(t.kcal) + "</b><span>מתוך " + n(fmt(g.kcal)) + " קלוריות · " + n(pct + "%") + '</span></div><div class="bar"><i style="width:' + Math.min(100, pct) + "%;background:" + T.kcal + '"></i></div>' +
-      '<div class="macs flat">' + macro("חלבון", T.protein, t.protein, g.protein) + macro("פחמימה", T.carbs, t.carbs, g.carbs) + macro("שומן", T.fat, t.fat, g.fat) + "</div></div>" +
-      '<div class="gt gtb"><span>ארוחות</span>' + insEntry(key, "day") + "</div>" + (groups || '<div class="empty-card">לא נרשמו ארוחות ביום הזה</div>') +
-      '<div class="cta"><button class="btn pri" data-act="newmealday" data-key="' + key + '">＋ הוספת ארוחה ' + (key === today ? "להיום" : "ליום הזה") + "</button></div></div>";
+      '<div class="card dsum">' + row("dk", "קלוריות", T.kcal, t.kcal, g.kcal, "", false) + row("dp", "חלבון", T.protein, t.protein, g.protein, gram, true) + row("dc", "פחמימה", T.carbs, t.carbs, g.carbs, gram, false) + row("df", "שומן", T.fat, t.fat, g.fat, gram, false) + "</div>" +
+      (meals.length ? '<div class="card dtab"><div class="dth"><span>ארוחה</span><span>קל׳</span><span>חלבון</span><span>פחמ׳</span><span>שומן</span><span></span></div>' + rows + "</div>"
+        : '<div class="empty-card">לא נרשמו ארוחות ביום הזה</div>') +
+      tease +
+      '<div class="dadd"><button class="btn-sm" data-act="newmealday" data-key="' + key + '">＋ הוספת ארוחה ' + (key === today ? "להיום" : "ליום הזה") + "</button></div></div>";
   }
 
   // ---------- sheets ----------
@@ -473,7 +507,9 @@
   function imgPut(id, data, cb) { idb(function (db) { if (!db) return cb(false); try { var tx = db.transaction("dish", "readwrite"); tx.objectStore("dish").put(data, id); tx.oncomplete = function () { IMG.cache[id] = data; cb(true); }; tx.onerror = tx.onabort = function () { cb(false); }; } catch (e) { cb(false); } }); }
   function imgGet(id, cb) { if (IMG.cache[id]) return cb(IMG.cache[id]); idb(function (db) { if (!db) return cb(null); try { var q = db.transaction("dish").objectStore("dish").get(id); q.onsuccess = function () { if (q.result) IMG.cache[id] = q.result; cb(q.result || null); }; q.onerror = function () { cb(null); }; } catch (e) { cb(null); } }); }
   function imgDel(id) { delete IMG.cache[id]; idb(function (db) { if (db) try { db.transaction("dish", "readwrite").objectStore("dish").delete(id); } catch (e) {} }); }
+  function noop() {}
   function hydrate(root) {
+    if (root && root.querySelectorAll) root.querySelectorAll(".dsw").forEach(function (e) { e.onclick = noop; });   // v10: WebKit only synthesizes a tap-click on a div row that has its own listener (the real work is delegated)
     (root || document).querySelectorAll("[data-dimg]").forEach(function (el) {
       var id = el.getAttribute("data-dimg");
       imgGet(id, function (u) { if (u) { el.style.backgroundImage = "url(" + u + ")"; el.classList.add("has"); } else el.classList.add("none"); });
@@ -506,11 +542,23 @@
     if (d.photo) imgGet(id, function (u) { if (u && ui.pendPhoto === undefined) { setPend(u); ui.pendPhoto = undefined; } });
   }
   function dishTotals(d) { return tot(d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { return snapshot(i.ingId, i); })); }
-  function rowDish(d) {
+  // v10: delete a saved dish right away, offer "ביטול" for 5 s; the photo is only dropped (locally + cloud) once the undo window closes
+  var pendDel = null;
+  function commitDel() { var p = pendDel; pendDel = null; toast._done = null; if (!p) return; imgDel(p.d.id); if (window.Cloud) Cloud.photoChanged(p.d.id, true); }
+  function delDish(id) {
+    var d = S.dishes().filter(function (x) { return x.id === id; })[0]; if (!d) return;
+    commitDel();
+    pendDel = { d: d }; S.deleteDish(id); if (draft) delete draft.added[id];
+    if (draft && document.getElementById("list")) refreshBuild();
+    toast._done = commitDel;
+    toast("המנה נמחקה · " + d.name, "ביטול", function () { var p = pendDel; pendDel = null; toast._done = null; if (!p) return; S.restoreDish(p.d); if (draft && document.getElementById("list")) refreshBuild(); toast("המנה חזרה ★"); }, 5000);
+  }
+  function rowDish(d) {   // v10: tap the row = add to the meal · ✏️ = edit (name/photo) · 🗑 or swipe left = delete (with undo)
     var v = dishTotals(d), a = draft.added[d.id];
     var sub = d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { var ing = ING[i.ingId]; return (optOf(ing, i.mode) ? r1(i.qty) + " " + unitWord(ing, i.qty, i.mode) : Math.round(i.qty) + " ג׳") + " " + ing.name.split(",")[0]; }).join(" · ");
-    return '<div class="r4 dish off' + (a ? " added" : "") + '"><button class="delx" data-deldish="' + d.id + '" aria-label="מחיקת מנה" title="מחיקת מנה">✕</button><button class="dthumb" data-editdish="' + d.id + '" aria-label="עריכת המנה והתמונה">' + thumb(d) + '</button><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + (a ? '<span class="ok-t">נוסף לארוחה ×' + n(a) + "</span>" : esc(sub)) + "</span></div>" +
-      big(v, false) + '<button class="addb" data-dish="' + d.id + '" aria-label="הוספת המנה">' + (a ? "✓" : "+") + "</button></div>";
+    return '<div class="dsw" data-swipe="' + d.id + '"><div class="dswbg" aria-hidden="true">' + ICON.trash + '<span>מחיקה</span></div>' +
+      '<div class="r4 dish off' + (a ? " added" : "") + '" data-dish="' + d.id + '" role="button" aria-label="הוספת ' + esc(d.name) + ' לארוחה"><span class="dthumb">' + thumb(d) + '</span><div class="rt"><b class="nm">' + esc(d.name) + '</b><span class="bs">' + (a ? '<span class="ok-t">✓ נוסף לארוחה ×' + n(a) + "</span>" : esc(sub)) + "</span></div>" +
+      big(v, false) + '<span class="dacts"><button class="dact ed" data-editdish="' + d.id + '" aria-label="עריכת המנה" title="עריכה">' + ICON.pencil + '</button><button class="dact del" data-deldish="' + d.id + '" aria-label="מחיקת המנה" title="מחיקה">' + ICON.trash + "</button></span></div></div>";
   }
   function listHTML() {
     var q = draft.q.trim();
@@ -562,15 +610,21 @@
       '<div class="smac"><span class="cc">פחמימה ' + n(Math.round(t.carbs)) + ' ג׳</span> · <span class="fc">שומן ' + n(Math.round(t.fat)) + ' ג׳</span></div><div class="aft' + (lk < 0 ? " over" : "") + '">' + aft + "</div></div>" +
       '<div class="bar"><button class="txt" data-act="toggle" aria-expanded="' + draft.open + '" aria-label="פירוט הארוחה">' + ICON.chevUp +
       '<span class="cnt">' + (items.length ? n(items.length) + (items.length === 1 ? " מרכיב" : " מרכיבים") : "ריק") + '</span><span class="dt">·</span><span class="kk">' + n(fmt(t.kcal)) + ' קלוריות</span><span class="dt">·</span><span class="pr">' + n(Math.round(t.protein)) + " ג׳ חלבון</span></button>" +
-      '<button class="rb save" data-act="savedish" aria-label="שמור כמנה" title="שמור כמנה"' + (items.length ? "" : " disabled") + ">" + ICON.book + "</button>" +
+      (function () { var sd = items.length && savedDish(); return '<button class="rb save' + (sd ? " on" : "") + '" data-act="savedish" aria-label="' + (sd ? "שמור כמנה: " + esc(sd.name) : "שמור כמנה") + '" title="' + (sd ? "שמור ★" : "שמור כמנה") + '"' + (items.length ? "" : " disabled") + ">" + (sd ? ICON.bookOn : ICON.book) + "</button>"; })() +
       '<button class="rb ok" data-act="addday" aria-label="הוסף לסך היומי" title="הוסף לסך היומי"' + (items.length ? "" : " disabled") + ">" + ICON.check + "</button></div>";
+  }
+  function draftSig() { return draft.order.filter(function (id) { return draft.items[id] && draft.items[id].qty > 0; }).map(function (id) { var it = draft.items[id]; return id + ":" + it.mode + ":" + (Math.round(it.qty * 100) / 100); }).sort().join("|"); }
+  function dishSig(d) { return d.items.filter(function (i) { return i.qty > 0; }).map(function (i) { return i.ingId + ":" + i.mode + ":" + (Math.round(i.qty * 100) / 100); }).sort().join("|"); }
+  function savedDish() {   // v10: the meal being built is exactly a saved dish → save icon is green
+    if (draft.fixed && draft.fixed.length) return null; var sg = draftSig(); if (!sg) return null;
+    return S.dishes().filter(function (d) { return dishSig(d) === sg; })[0] || null;
   }
   function renderBuild() {
     var info = mealInfo(draft.meal);
     var past = draft.date !== S.dateKey();
     $app.innerHTML = '<div class="build"><div class="top"><div class="tt">' + (draft.editId ? '<span class="ed">עריכה</span>' : "") + '<h2 id="mealTitle">' + info.title + "</h2>" + (past ? '<small class="bdate">' + dayLabel(draft.date) + "</small>" : "") + '</div><button class="x" data-act="cancel" aria-label="סגירה">✕</button></div>' +
       '<div class="search"><span class="ic">' + ICON.search + '</span><input id="q" type="search" placeholder="חיפוש מרכיב לפי שם" value="' + esc(draft.q) + '" autocomplete="off">' + '<button class="clr" data-act="clearq" aria-label="ניקוי"' + (draft.q ? "" : " hidden") + '>✕</button>' + "</div>" +
-      '<div class="seg" id="seg">' + CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '">' + c[1] + "</button>"; }).join("") + "</div>" +
+      '<div class="seg" id="seg">' + CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join("") + "</div>" +
       '<div class="list" id="list">' + listHTML() + "</div>" +
       '<div class="sum' + (draft.open ? " open" : "") + '" id="sum">' + sumHTML() + "</div></div>";
     hydrate(document.getElementById("list"));
@@ -579,7 +633,7 @@
     var l = document.getElementById("list"); var top = l ? l.scrollTop : 0;
     document.getElementById("list").innerHTML = listHTML();
     var s = document.getElementById("sum"); s.className = "sum" + (draft.open ? " open" : ""); s.innerHTML = sumHTML(); fabPlace();
-    document.getElementById("seg").innerHTML = CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '">' + c[1] + "</button>"; }).join("");
+    document.getElementById("seg").innerHTML = CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join("");
     if (keepScroll !== false) document.getElementById("list").scrollTop = top;
     hydrate(document.getElementById("list"));
   }
@@ -865,7 +919,7 @@
     if (c === "all" && !q) return Object.keys(CAT_LABEL).map(function (k) { var g = list.filter(function (i) { return i.cat === k; }); return g.length ? '<div class="dv">' + CAT_LABEL[k] + " · " + n(g.length) + "</div>" + g.map(dbRow).join("") : ""; }).join("") + add;
     return '<div class="dv">' + n(list.length) + " תוצאות</div>" + list.map(dbRow).join("") + add;
   }
-  function dbSeg() { return DB_CATS.map(function (c) { return '<button class="' + (c[0] === ui.dbCat ? "on" : "") + '" data-dbcat="' + c[0] + '">' + c[1] + "</button>"; }).join(""); }
+  function dbSeg() { return DB_CATS.map(function (c) { return '<button class="' + (c[0] === ui.dbCat ? "on" : "") + '" data-dbcat="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join(""); }
   function renderDB() {
     $app.innerHTML = '<div class="set dbp">' + pageHead("מאגר ערכים", n(ING_LIST.length) + " מרכיבים · ערכים ל־100 ג׳ וליחידה") +
       '<div class="search"><span class="ic">' + ICON.search + '</span><input id="dbq" type="search" placeholder="חיפוש מרכיב, למשל: טופו" value="' + esc(ui.dbQ) + '" autocomplete="off"><button class="clr" data-act="dbclear" aria-label="ניקוי"' + (ui.dbQ ? "" : " hidden") + ">✕</button></div>" +
@@ -947,11 +1001,11 @@
           if (key === today) { var pr = S.prefs(); S.setPrefs({ tip: { date: today, hidden: false, rot: (pr.tip.rot || 0) + 1 } }); ui.celebrate = { before: before, edited: !!editing, msg: editing ? mt + " עודכנה" : mt + " נוספה לסך היומי" }; go("#/"); }
           else { go("#/day/" + key); toast(editing ? mt + " עודכנה" : mt + " נוספה ל" + dayLabel(key)); }
           return;
-        case "savedish": if (!draftSnap().length) return; sheetSaveDish(); return;
+        case "savedish": if (!draftSnap().length) return; var already = savedDish(); if (already) { toast("כבר שמור ב־★ · " + already.name); return; } sheetSaveDish(); return;
         case "dosavedish":
           var nm = (document.getElementById("dishName").value || "").trim(); if (!nm) { toast("צריך שם למנה"); return; }
           var nd = S.addDish(nm, draft.order.filter(function (id) { return draft.items[id]; }).map(function (id) { return { ingId: id, mode: draft.items[id].mode, qty: draft.items[id].qty }; }));
-          savePhoto(nd.id, ui.pendPhoto || undefined, function () { closeSheet(); refreshBuild(); toast("נשמר בשמורות: " + nm); }); return;
+          savePhoto(nd.id, ui.pendPhoto || undefined, function () { closeSheet(); refreshBuild(); toast("נשמר ב־★ · " + nm); }); return;
         case "doeditdish":
           var en = (document.getElementById("dishName").value || "").trim(); if (!en) { toast("צריך שם למנה"); return; }
           S.updateDish(ui.editDish, { name: en }); savePhoto(ui.editDish, ui.pendPhoto, function () { closeSheet(); if (draft) refreshBuild(); toast("המנה עודכנה"); }); return;
@@ -972,6 +1026,7 @@
         case "fixcancel": var fi = document.getElementById("fixIn"); if (fi) fi.value = ""; ui.fixAdding = false; renderSettings(); return;
         case "menu": openMenu(); return;
         case "goals": closeSheet(); sheetGoal(); return;
+        case "brainfab": tipClose(true); if ((location.hash || "").indexOf("#/insights/") === 0) { var fr = ui.insFrom || "#/"; go(fr.indexOf("#/day/") === 0 ? "#/day/" + brainKey() : fr.indexOf("#/build") === 0 && draft ? "#/build" : "#/"); } else go("#/insights/" + brainKey()); return;
         case "tipopen": if (fab.el.classList.contains("open")) tipClose(); else tipOpen(false); return;
         case "tipclose": tipClose(); return;
         case "tipnext": var rt = tipRot() + 1, x0 = tipNow(); S.setPrefs({ tip: { date: S.dateKey(), hidden: false, rot: rt, seenKey: tipKey(x0) } }); document.getElementById("tiptext").textContent = tipText(x0.cat, rt); clearTimeout(fab.autoClose); return;
@@ -1028,6 +1083,7 @@
     if ((el = t.closest("[data-add]"))) { var ing = ING[el.getAttribute("data-add")]; setQty(ing.id, ing.defMode, ing.defMode === "u" ? 1 : 100); refreshBuild(); return; }
     if ((el = t.closest("[data-rm]"))) { setQty(el.getAttribute("data-rm"), "g", 0); refreshBuild(); toast("הוסר מהארוחה"); return; }
     if ((el = t.closest("[data-rmfix]"))) { draft.fixed.splice(+el.getAttribute("data-rmfix"), 1); refreshBuild(); toast("הוסר מהארוחה"); return; }
+    if ((el = t.closest("[data-deldish]"))) { delDish(el.getAttribute("data-deldish")); return; }
     if ((el = t.closest("[data-editdish]"))) { sheetDish(el.getAttribute("data-editdish")); return; }
     if ((el = t.closest("[data-step],[data-es]"))) {
       var id = el.getAttribute("data-id"), it = draft.items[id]; if (!it) return;
@@ -1045,8 +1101,29 @@
       });
       draft.added[dish.id] = (draft.added[dish.id] || 0) + 1; refreshBuild(); return;
     }
-    if ((el = t.closest("[data-deldish]"))) { if (!arm(el, "dish" + el.getAttribute("data-deldish"))) return; imgDel(el.getAttribute("data-deldish")); if (window.Cloud) Cloud.photoChanged(el.getAttribute("data-deldish"), true); S.deleteDish(el.getAttribute("data-deldish")); refreshBuild(); toast("המנה נמחקה"); return; }
   });
+
+  // v10: swipe a saved dish left to delete (pointer events; vertical scrolling stays native via touch-action:pan-y)
+  var sw = null;
+  document.addEventListener("pointerdown", function (ev) {
+    var w = ev.target.closest && ev.target.closest(".dsw"); if (!w || ev.target.closest(".dact") || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    sw = { w: w, r: w.querySelector(".r4"), x: ev.clientX, y: ev.clientY, dx: 0, on: false, id: ev.pointerId };
+  });
+  document.addEventListener("pointermove", function (ev) {
+    if (!sw || ev.pointerId !== sw.id) return;
+    var dx = ev.clientX - sw.x, dy = ev.clientY - sw.y;
+    if (!sw.on) { if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { sw = null; return; } if (dx < -10 && Math.abs(dx) > Math.abs(dy)) { sw.on = true; sw.w.classList.add("swiping"); try { sw.w.setPointerCapture(ev.pointerId); } catch (e) {} } else return; }
+    sw.dx = Math.min(0, dx); sw.r.style.transform = "translateX(" + sw.dx + "px)";
+    sw.w.classList.toggle("far", sw.dx < -sw.w.offsetWidth * 0.35);
+  });
+  function swEnd(ev) {
+    if (!sw || ev.pointerId !== sw.id) return; var s2 = sw; sw = null; if (!s2.on) return;
+    s2.w.classList.remove("swiping", "far"); ui.swiped = performance.now();
+    if (s2.dx < -s2.w.offsetWidth * 0.35) { s2.w.style.maxHeight = s2.w.offsetHeight + "px"; void s2.w.offsetHeight; s2.w.classList.add("gone"); var id = s2.w.getAttribute("data-swipe"); setTimeout(function () { delDish(id); }, 300); }
+    else s2.r.style.transform = "";
+  }
+  document.addEventListener("pointerup", swEnd); document.addEventListener("pointercancel", swEnd);
+  document.addEventListener("click", function (ev) { if (ui.swiped && performance.now() - ui.swiped < 400 && ev.target.closest && ev.target.closest(".dsw")) { ev.stopPropagation(); ev.preventDefault(); } }, true);
 
   document.addEventListener("input", function (ev) {
     if (ev.target.id === "aCode") { var cv = ev.target.value.replace(/\D/g, "").slice(0, 10); if (cv !== ev.target.value) ev.target.value = cv; authErr(""); return; }
@@ -1056,7 +1133,7 @@
       draft.q = ev.target.value;
       var cb = document.querySelector(".search .clr"); if (cb) cb.hidden = !draft.q;
       document.getElementById("list").innerHTML = listHTML(); document.getElementById("list").scrollTop = 0; hydrate(document.getElementById("list"));
-      document.getElementById("seg").innerHTML = CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '">' + c[1] + "</button>"; }).join("");
+      document.getElementById("seg").innerHTML = CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join("");
     }
   });
   document.addEventListener("change", function (ev) {
