@@ -724,3 +724,41 @@ input.fromlabel{color:#2F5F2C}
 .wr.miss .wk2 b{color:#C44732}
 .mchg{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:right;background:none;border:0;padding:0;cursor:pointer}
 .mchgl{font:700 12px Assistant;color:var(--gd);opacity:.85}
+
+
+/* ---------- v16: +/− add button, own-values tabs, water FAB + glasses sheet ---------- */
+.addb.on{background:#C44732;border-color:#C44732;color:#fff}
+.ctabs{display:flex;gap:6px;margin:0 0 12px;padding:4px;background:var(--bg);border:1px solid var(--ln);border-radius:14px}
+.ctabs button{flex:1;height:38px;border-radius:11px;font:700 14px Assistant;color:var(--br);background:transparent}
+.ctabs button.on{background:var(--paper);color:var(--gd);box-shadow:0 1px 4px rgba(60,40,20,.1)}
+#cOwnHint{margin:0 0 10px}
+
+#tipfab.waterfab{position:fixed;left:12px;bottom:calc(var(--sb) + 22px);z-index:45;transition:bottom .25s,transform .25s,opacity .25s}
+#tipfab.waterfab.lift{bottom:calc(var(--sb) + 92px)}
+body.sheet-open #tipfab.waterfab,body.sum-open #tipfab.waterfab{opacity:0;pointer-events:none}
+body.nofab #tipfab.waterfab{display:none}
+.wfab{width:56px;height:56px;border-radius:50%;background:var(--paper);border:2px solid #4A8AA8;box-shadow:0 6px 16px rgba(62,110,134,.28);color:#3E6E86;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.wfab .wdrop{position:relative;z-index:1;display:flex}
+.wfab .wfr{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#tipfab.waterfab.met .wfab{border-color:var(--g);color:var(--gd)}
+#tipfab.waterfab.met .wfa{stroke:var(--g)}
+
+.water .sublead{margin:0 0 10px}
+.wcups{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:0 0 12px}
+.wcups button{height:56px;border:1.5px solid var(--ln);border-radius:14px;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--brd)}
+.wcups button b{font:800 14px Assistant}
+.wcups button span{font:600 10px Assistant;color:var(--mut)}
+.wcups button.on{border-color:#4A8AA8;background:#E7F2F6;color:#3E6E86;box-shadow:inset 0 0 0 1px #4A8AA8}
+
+.wbsum{text-align:center;margin:0 0 8px}
+.wbsum b{font:800 28px "Frank Ruhl Libre",serif;color:#3E6E86}
+.wbsum span{font:600 13px Assistant;color:var(--mut)}
+.wgrid{display:grid;grid-template-columns:repeat(var(--n,5),1fr);gap:10px 8px;margin:12px 0 16px}
+.wglass{height:54px;border:0;background:transparent;padding:0;display:flex;align-items:flex-end;justify-content:center}
+.wglass .wgv{width:26px;height:46px;border-radius:6px 6px 8px 8px;border:1.8px solid #5A7A88;background:linear-gradient(#F7F4EC,#F7F4EC) padding-box;position:relative;overflow:hidden}
+.wglass .wgv::after{content:"";position:absolute;left:0;right:0;bottom:0;height:0;background:#7EB8C9;transition:height .25s}
+.wglass.full .wgv::after{height:100%}
+.wglass.part .wgv{background:#F7F4EC}
+.wglass.part .wgv::after{height:var(--h,50%)}
+
+[hidden]{display:none!important}

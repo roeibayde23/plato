@@ -78,6 +78,21 @@
     out.days = {};
     mergeList(meals(L), meals(R), "meal", function (m) { return m.id; }, dead).forEach(function (m) { var k = m._day; delete m._day; (out.days[k] = out.days[k] || { meals: [] }).meals.push(m); });
     for (var dk in out.days) out.days[dk].meals.sort(function (x, y) { return x.createdAt - y.createdAt; });
+    // v16: merge water logs per day (a day can have water without meals)
+    var dayKeys = {};
+    [L.days, R.days, out.days].forEach(function (D) { if (D) for (var k in D) dayKeys[k] = 1; });
+    for (var wk in dayKeys) {
+      out.days[wk] = out.days[wk] || { meals: [] };
+      var ll = (L.days[wk] && L.days[wk].water && L.days[wk].water.logs) || [];
+      var rl = (R.days[wk] && R.days[wk].water && R.days[wk].water.logs) || [];
+      var logs = mergeList(ll, rl, "water", function (x) { return x.id; }, dead);
+      if (logs.length) {
+        var lu = (L.days[wk] && L.days[wk].water && L.days[wk].water.u) || 0;
+        var ru = (R.days[wk] && R.days[wk].water && R.days[wk].water.u) || 0;
+        out.days[wk].water = { logs: logs, u: Math.max(lu, ru) };
+      }
+      if (!out.days[wk].meals.length && !(out.days[wk].water && out.days[wk].water.logs && out.days[wk].water.logs.length)) delete out.days[wk];
+    }
     out.dishes = mergeList(L.dishes, R.dishes, "dish", function (d) { return d.id; }, dead);
     out.customIngredients = mergeList(L.customIngredients, R.customIngredients, "custom", function (c) { return c.id; }, dead);
     out.fixes = mergeList(L.fixes, R.fixes, "fix", function (f) { return f.id; }, dead).sort(function (x, y) { return y.createdAt - x.createdAt; });
@@ -145,7 +160,7 @@
     deleteMeal: function (key, id) {
       var d = st().days[key]; if (!d) return;
       d.meals = d.meals.filter(function (m) { return m.id !== id; }); tomb("meal", id);
-      if (!d.meals.length) delete st().days[key];
+      if (!d.meals.length && !(d.water && d.water.logs && d.water.logs.length)) delete st().days[key];
       save();
     },
 
@@ -172,6 +187,38 @@
     addFix: function (text) { st().fixes.unshift({ id: uid(), text: text, done: false, createdAt: Date.now(), u: now() }); save(); },
     toggleFix: function (id) { st().fixes.forEach(function (f) { if (f.id === id) { f.done = !f.done; f.u = now(); } }); save(); },
     deleteFix: function (id) { st().fixes = st().fixes.filter(function (f) { return f.id !== id; }); tomb("fix", id); save(); },
+
+    // v16: water logs live on the day; cup size / idea / custom goal live in prefs.water
+    waterPrefs: function () { return Object.assign({ cupMl: 0, goalMl: 0 }, (st().prefs && st().prefs.water) || {}); },
+    setWaterPrefs: function (p) { st().prefs.water = Object.assign({}, st().prefs.water || {}, p); stamp("prefs"); save(); },
+    waterGoal: function () {
+      var p = this.waterPrefs();
+      if (p.goalMl >= 500) return p.goalMl;
+      var kg = (st().profile && st().profile.weight) || 0;
+      return kg > 0 ? Math.max(1500, Math.round(kg * 35 / 50) * 50) : 2500;
+    },
+    water: function (key) {
+      key = key || dateKey();
+      var d = st().days[key], logs = d && d.water && d.water.logs ? clone(d.water.logs) : [];
+      var ml = 0; logs.forEach(function (x) { ml += x.ml; });
+      return { key: key, logs: logs, ml: ml };
+    },
+    addWater: function (ml, key) {
+      var s = st(); key = key || dateKey(); ml = Math.round(Number(ml) || 0);
+      if (ml <= 0) return null;
+      if (!s.days[key]) s.days[key] = { meals: [] };
+      if (!s.days[key].water) s.days[key].water = { logs: [], u: now() };
+      var log = { id: uid(), ml: ml, at: now(), u: now() };
+      s.days[key].water.logs.push(log); s.days[key].water.u = log.u; save(); return clone(log);
+    },
+    undoWater: function (id, key) {
+      key = key || dateKey();
+      var d = st().days[key]; if (!d || !d.water) return;
+      d.water.logs = (d.water.logs || []).filter(function (x) { return x.id !== id; });
+      d.water.u = now(); tomb("water", id);
+      if (!d.meals.length && !d.water.logs.length) delete st().days[key];
+      save();
+    },
 
     // weight history; profile.weight always mirrors the latest entry
     weights: function () { return clone(st().weights).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.at - b.at; }); },

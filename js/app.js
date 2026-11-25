@@ -33,7 +33,8 @@
     book: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>',
     plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
-    eye: function (open) { return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>' + (open ? "" : '<path d="M3 3l18 18"/>') + "</svg>"; }
+    eye: function (open) { return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>' + (open ? "" : '<path d="M3 3l18 18"/>') + "</svg>"; },
+    drop: '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2c.4.6 6.2 8 6.2 12.2A6.2 6.2 0 1 1 5.8 14.4C5.8 10.2 11.6 2.8 12 2.2z"/></svg>'
   };
 
   // ---------- meals ----------
@@ -91,6 +92,12 @@
     var unit = null;
     for (var k = 0; k < units.length; k++) if (!BAD_UNIT.test(units[k].name_he)) { unit = units[k]; break; }
     var cat = i.category;
+    // v16: a custom "ערכים משלי" ingredient is one portion (the values he typed), not per 100 g
+    if (i.portion && i.per_portion) {
+      var pp = i.per_portion;
+      var pu = { name_he: "פורציה", grams: 100 };
+      return { id: i.id, name: i.name_he, cat: cat, p: pp, unit: pu, units: [pu], opts: [{ m: "u", name: "פורציה", grams: 100, short: "יח׳" }], defMode: "u", est: false, custom: !!custom, edited: !!ov, orig: i, portion: true };
+    }
     var defMode = unit && (unit.grams <= 130 || cat === "fruit") ? "u" : "g";
     // unit options for the stepper: up to 3 real units, plus a כפית (= ⅓ כף) wherever only a כף exists
     var opts = [], seen = {};
@@ -155,7 +162,7 @@
     else if (h.indexOf("#/day/") === 0 && /^\d{4}-\d\d-\d\d$/.test(h.slice(6))) { applyTheme(); renderDay(h.slice(6) > S.dateKey() ? S.dateKey() : h.slice(6)); }
     else renderHome();
     window.scrollTo(0, 0);
-    fabPlace(); setTimeout(fabCheck, 400);
+    fabPlace();
   }
   function go(h) { if (location.hash === h) route(); else location.hash = h; }
   window.addEventListener("hashchange", route);
@@ -363,34 +370,99 @@
   function tipNow() { var t = S.day().totals, g = S.goal(), h = new Date().getHours(); return { cat: tipFor(t, g, h), band: h < 11 ? "m" : h < 16 ? "d" : h < 20 ? "e" : "n", meals: S.day().meals.length }; }
   function tipKey(x) { return S.dateKey() + "|" + x.cat + "|" + x.band + "|" + x.meals; }
   function fabInit() {
-    var d = document.createElement("div"); d.id = "tipfab"; d.className = "tipfab peek";
-    d.innerHTML = '<div class="tippop" id="tippop" role="dialog" aria-label="טיפ אישי" hidden><p id="tiptext"></p><div class="tpb"><button data-act="tipnext">עוד טיפ ↻</button><button class="x" data-act="tipclose" aria-label="סגירה">✕</button></div></div>' +
-      '<button class="fab" data-act="tipopen" aria-label="טיפ אישי"><img src="icons/logo.png" alt=""><span class="badge"></span></button>';
+    var d = document.createElement("div"); d.id = "tipfab"; d.className = "waterfab out";
+    d.innerHTML = '<button class="fab wfab" data-act="waterfab" aria-label="שתיית מים">' +
+      '<svg class="wfr" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23" fill="none" stroke="rgba(74,138,168,.22)" stroke-width="3"/>' +
+      '<circle class="wfa" cx="26" cy="26" r="23" fill="none" stroke="#4A8AA8" stroke-width="3" stroke-linecap="round" transform="rotate(-90 26 26)"/></svg>' +
+      '<span class="wdrop">' + ICON.drop + "</span></button>";
     document.body.appendChild(d); fab.el = d;
-    new MutationObserver(function () { document.body.classList.toggle("sheet-open", $sheet.children.length > 0); if ($sheet.children.length) tipClose(true); }).observe($sheet, { childList: true });
-    window.addEventListener("scroll", fabPeekSoon, { passive: true });
-    document.addEventListener("scroll", function (e) { if (e.target && e.target.id === "list") fabPeekSoon(); }, true);
-    setInterval(fabCheck, 60000);
+    new MutationObserver(function () { document.body.classList.toggle("sheet-open", $sheet.children.length > 0); }).observe($sheet, { childList: true });
+    var hold = 0;
+    d.addEventListener("pointerdown", function (e) {
+      if (!e.target.closest("[data-act=waterfab]")) return;
+      clearTimeout(hold);
+      hold = setTimeout(function () { hold = 0; fab.held = true; sheetCupSize("keep"); }, 550);
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) {
+      d.addEventListener(ev, function () { clearTimeout(hold); hold = 0; });
+    });
+    fabPaint();
   }
-  function fabPlace() { if (!fab.el) return; var b = (location.hash || "").indexOf("#/build") === 0; fab.el.classList.toggle("lift", b); document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0 || (location.hash || "").indexOf("#/welcome") === 0 || S.needsOnboard()); document.body.classList.toggle("sum-open", b && !!draft && !!draft.open); }
-  function fabOut(fresh) {
-    var e = fab.el; if (!e) return; clearTimeout(fab.idle);
-    e.classList.remove("peek"); e.classList.add("out"); if (fresh) { e.classList.remove("bounce2"); void e.offsetWidth; e.classList.add("bounce2", "new"); }
-    fab.idle = setTimeout(fabPeek, 5000);
+  function fabPlace() {
+    if (!fab.el) return;
+    var b = (location.hash || "").indexOf("#/build") === 0;
+    fab.el.classList.toggle("lift", b);
+    document.body.classList.toggle("nofab", (location.hash || "").indexOf("#/login") === 0 || (location.hash || "").indexOf("#/welcome") === 0 || S.needsOnboard());
+    document.body.classList.toggle("sum-open", b && !!draft && !!draft.open);
+    fabPaint();
   }
-  function fabPeek() { var e = fab.el; if (!e || e.classList.contains("open")) return; e.classList.remove("out", "bounce2"); e.classList.add("peek"); }
-  function fabPeekSoon() { if (fab.el && !fab.el.classList.contains("open")) fabPeek(); }
-  function fabCheck() { var k = tipKey(tipNow()), pr = S.prefs().tip || {}; if (k !== pr.seenKey && k !== fab.lastKey) { if (/^#\/build/.test(location.hash)) { if (fab.el && !fab.el.classList.contains("open")) { fab.el.classList.add("new"); fabPeek(); } return; } fab.lastKey = k; fabOut(true); } }
-  function tipRot() { var tp = S.prefs().tip || {}; return tp.date === S.dateKey() ? tp.rot || 0 : 0; }
-  function tipOpen(cheer, msg) {
-    var e = fab.el, x = tipNow(); if (!e) return; clearTimeout(fab.idle); clearTimeout(fab.autoClose);
-    document.getElementById("tiptext").innerHTML = (cheer ? "<b>כל הכבוד! 🎉" + (msg ? " <small>" + esc(msg) + "</small>" : "") + "</b>" : "") + esc(tipText(x.cat, tipRot()));
-    e.setAttribute("data-cat", x.cat);
-    var tp = S.prefs().tip || {}; S.setPrefs({ tip: { date: S.dateKey(), hidden: false, rot: tipRot(), seenKey: tipKey(x) } });
-    e.classList.remove("peek", "new"); e.classList.add("out", "open"); document.getElementById("tippop").hidden = false;
+  function fabPaint() {
+    if (!fab.el) return;
+    var circ = 2 * Math.PI * 23, pct = waterPct();
+    var a = fab.el.querySelector(".wfa");
+    if (a) a.style.strokeDasharray = (pct * circ).toFixed(1) + " " + circ.toFixed(1);
+    fab.el.classList.toggle("met", pct >= 1);
   }
-  function tipClose(quiet) { var e = fab.el; if (!e) return; clearTimeout(fab.autoClose); e.classList.remove("open"); document.getElementById("tippop").hidden = true; if (!quiet) fab.idle = setTimeout(fabPeek, 1800); else fabPeek(); }
-  function fabCheer(msg) { fabOut(true); setTimeout(function () { tipOpen(true, msg); fab.autoClose = setTimeout(function () { tipClose(); }, 4500); }, 900); }
+  function fabCheer() { /* v16: the tip popup is gone; meal-save already toasts + celebrates */ }
+
+  // ---------- v16: water (idea B — cup sizes + daily glasses grid) ----------
+  var WATER_CUPS = [200, 250, 330, 500];
+  function waterPct() { return Math.min(1, (S.water().ml || 0) / Math.max(1, S.waterGoal())); }
+  function waterFmt(ml) { return n(fmt(Math.round(ml))); }
+  function waterCupBtns(sel) {
+    sel = sel || (S.waterPrefs().cupMl || 0);
+    return '<div class="wcups">' + WATER_CUPS.map(function (c) {
+      return '<button type="button" data-act="watercup" data-ml="' + c + '" class="' + (sel === c ? "on" : "") + '"><b class="n">' + n(c) + "</b><span>מ״ל</span></button>";
+    }).join("") + '<button type="button" data-act="watercupx" class="' + (sel && WATER_CUPS.indexOf(sel) < 0 ? "on" : "") + '">אחר</button></div>';
+  }
+  function sheetCupSize(then) {
+    ui.waterThen = then || "open";
+    var cur = S.waterPrefs().cupMl || 0;
+    openSheet(head("גודל הכוס", "💧") + '<p class="sublead">באיזה גודל הכוס שאתה שותה ממנה? אפשר לשנות אחר כך.</p><div class="sh-body">' +
+      waterCupBtns(cur) +
+      '<div class="frow" id="wcustom"' + (cur && WATER_CUPS.indexOf(cur) < 0 ? "" : " hidden") + '><span>גודל אחר</span><span class="fld"><input id="wCupMl" type="number" inputmode="numeric" min="50" max="2000" step="10" placeholder="300"' + (cur && WATER_CUPS.indexOf(cur) < 0 ? ' value="' + cur + '"' : "") + '><span>מ״ל</span></span></div></div>' +
+      '<button class="btn pri" data-act="savecup">שמירה</button>', "water");
+  }
+  function ensureCup(then) {
+    if ((S.waterPrefs().cupMl || 0) >= 50) {
+      if (then === "log") logCup();
+      else openWater();
+      return;
+    }
+    sheetCupSize(then);
+  }
+  function logCup() {
+    var ml = S.waterPrefs().cupMl || 250;
+    var log = S.addWater(ml);
+    toast("נרשמה כוס · " + waterFmt(ml) + " מ״ל", "ביטול", function () {
+      if (log) S.undoWater(log.id);
+      if (needHomePaint()) renderHome();
+      if ($sheet.querySelector(".water")) openWater();
+      fabPaint(); toast("הכוס בוטלה");
+    });
+    if (needHomePaint()) renderHome();
+    if ($sheet.querySelector(".water") && !$sheet.querySelector("#wCupMl")) openWater();
+    fabPaint(); buzz();
+  }
+  function needHomePaint() { var h = location.hash || "#/"; return h === "#/" || h === "" || h === "#"; }
+  function openWater() { return sheetWaterB(); }
+  function sheetWaterB() {
+    var w = S.water(), g = S.waterGoal(), cup = S.waterPrefs().cupMl || 250;
+    var nCups = Math.max(6, Math.ceil(g / Math.max(50, cup)));
+    var filled = w.ml / Math.max(50, cup);
+    var glasses = "";
+    for (var i = 0; i < nCups; i++) {
+      var f = Math.max(0, Math.min(1, filled - i));
+      glasses += '<button type="button" class="wglass' + (f >= 1 ? " full" : f > 0 ? " part" : "") + '" data-act="waterglass" data-i="' + i + '" style="' + (f > 0 && f < 1 ? "--h:" + Math.round(f * 100) + "%" : "") + '" aria-label="כוס ' + (i + 1) + '">' +
+        '<span class="wgv"></span></button>';
+    }
+    openSheet('<div class="water wb">' + head("מעקב מים", "💧") +
+      '<div class="wbsum"><b class="n">' + waterFmt(w.ml) + " / " + waterFmt(g) + '</b><span> מ״ל · יעד יומי</span></div>' +
+      '<p class="sublead">גודל כוס — לוחצים על כוס ברשת כדי למלא או להסיר</p>' + waterCupBtns(cup) +
+      '<div class="frow" id="wcustom" hidden><span>גודל אחר</span><span class="fld"><input id="wCupMl" type="number" inputmode="numeric" min="50" max="2000" step="10" placeholder="300"><span>מ״ל</span></span></div>' +
+      '<div class="wgrid" style="--n:' + Math.min(6, nCups) + '">' + glasses + "</div>" +
+      '<button class="btn pri" data-act="wateradd">＋ הוספת כוס · ' + n(cup) + " מ״ל</button></div>", "water");
+  }
 
   // ---------- v7: 🧠 daily insights — rule-based daily insights (no server, no AI) ----------
   function insights(key) {
@@ -554,7 +626,7 @@
     var v = valsFor(ing, g);
     var o = on ? optOf(ing, mode) : null;
     var basis = on ? (o ? "ל־" + n(r1(qty)) + " × " + esc(cleanUnit(o.name)) + (o.synth ? " (⅓ כף)" : "") : "ל־" + n(Math.round(qty)) + " ג׳")
-      : (ing.defMode === "u" ? esc(cleanUnit(ing.unit.name_he)) + " · " + n(r0(ing.unit.grams)) + " ג׳" : "ל־" + n(100) + " ג׳");
+      : (ing.portion ? "לפורציה · הערכים שהזנת" : (ing.defMode === "u" ? esc(cleanUnit(ing.unit.name_he)) + " · " + n(r0(ing.unit.grams)) + " ג׳" : "ל־" + n(100) + " ג׳"));
     var tags = (ing.est ? '<span class="tag est">הערכה</span>' : "") + (ing.custom ? '<span class="tag mine">שלי</span>' : "") + (ing.edited ? '<span class="tag ed">ערכתי</span>' : "");
     var ctl = "";
     if (on) {
@@ -562,7 +634,7 @@
         (ing.opts.length ? '<label class="mode"><select data-modesel="' + ing.id + '" aria-label="יחידת מידה">' + ing.opts.map(function (x) { return '<option value="' + x.m + '"' + (x.m === mode ? " selected" : "") + ">" + esc(x.short) + "</option>"; }).join("") + '<option value="g"' + (mode === "g" ? " selected" : "") + ">גרם</option></select></label>" : "") + "</div>";
     }
     return '<div class="r4 ' + (on ? "on" : "off") + '" data-row="' + ing.id + '"><div class="rt"><b class="nm">' + esc(ing.name) + tags + '</b><span class="bs">' + basis + "</span>" + ctl + "</div>" +
-      big(v, on) + (on ? "" : '<button class="addb" data-add="' + ing.id + '" aria-label="הוספה">+</button>') + "</div>";
+      big(v, on) + '<button class="addb' + (on ? " on" : "") + '" data-add="' + ing.id + '" aria-label="' + (on ? "הסרה" : "הוספה") + '">' + (on ? "−" : "+") + "</button></div>";
   }
   function big(v, on) {
     return '<div class="lt"><div class="big"><div><span class="bv kc">' + n(Math.round(v.kcal)) + '</span><span class="bl">קלוריות</span></div><div><span class="bv pr">' + n(r0(v.protein)) + '<small>ג׳</small></span><span class="bl">חלבון</span></div></div>' +
@@ -761,15 +833,23 @@
   }
   function sheetCustom(defCat) {
     defCat = CAT_LABEL[defCat] ? defCat : "protein";
+    ui.customMode = ui.customMode || "p100";
+    var mode = ui.customMode;
     var opts = Object.keys(CAT_LABEL).map(function (k) { return '<option value="' + k + '"' + (k === defCat ? " selected" : "") + ">" + CAT_LABEL[k] + "</option>"; }).join("");
-    var f = function (id, l, u) { return '<div class="frow"><span>' + l + '</span><span class="fld"><input id="' + id + '" type="number" inputmode="decimal" min="0" step="any"><span>' + u + "</span></span></div>"; };
+    var f = function (id, l, u) { return '<div class="frow"><span>' + l + '</span><span class="fld"><input id="' + id + '" type="number" inputmode="decimal" min="0" step="any">' + (u ? "<span>" + u + "</span>" : "") + "</span></div>"; };
     openSheet(head("מרכיב משלי", "🥣") +
-      '<div class="sh-body"><div class="lscan" id="lscan"><button class="btn sm2 lsbtn" data-act="scanlabel" type="button">' + ICON.camera + ' צלם תווית</button><span class="lsnote" id="lsnote">צילום של טבלת הערכים התזונתיים ימלא את השדות</span><input type="file" accept="image/*" id="labelFile" hidden></div>' +
-      '<div class="frow"><span>שם</span><span class="fld wide"><input id="cName" type="text" maxlength="40" placeholder="שם המרכיב" style="text-align:right"></span></div>' +
+      '<div class="ctabs" role="tablist" aria-label="אופן ההוספה">' +
+      '<button type="button" role="tab" data-act="cmode" data-mode="p100" class="' + (mode === "p100" ? "on" : "") + '" aria-selected="' + (mode === "p100") + '">לפי 100 גרם</button>' +
+      '<button type="button" role="tab" data-act="cmode" data-mode="own" class="' + (mode === "own" ? "on" : "") + '" aria-selected="' + (mode === "own") + '">ערכים משלי</button></div>' +
+      '<div class="sh-body"><div class="frow"><span>שם</span><span class="fld wide"><input id="cName" type="text" maxlength="40" placeholder="שם המרכיב" style="text-align:right"></span></div>' +
       '<div class="frow"><span>קטגוריה</span><span class="fld wide"><select id="cCat">' + opts + "</select></span></div>" +
+      '<div id="cP100"' + (mode === "p100" ? "" : " hidden") + '><div class="lscan" id="lscan"><button class="btn sm2 lsbtn" data-act="scanlabel" type="button">' + ICON.camera + ' צלם תווית</button><span class="lsnote" id="lsnote">צילום של טבלת הערכים התזונתיים ימלא את השדות</span><input type="file" accept="image/*" id="labelFile" hidden></div>' +
       f("cK", "קלוריות ל־100 ג׳", "") + f("cP", "חלבון ל־100 ג׳", "ג׳") + f("cC", "פחמימה ל־100 ג׳", "ג׳") + f("cF", "שומן ל־100 ג׳", "ג׳") +
       '<div class="frow"><span>יחידה (רשות)</span><span class="fld"><input id="cU" type="text" maxlength="14" placeholder="פרוסה" style="text-align:right"></span></div>' +
-      f("cUG", "משקל יחידה", "ג׳") + '</div><button class="btn pri" data-act="docustom">הוספה</button>');
+      f("cUG", "משקל יחידה", "ג׳") + "</div>" +
+      '<div id="cOwn"' + (mode === "own" ? "" : " hidden") + '><p class="hint" id="cOwnHint">הערכים של מה שאכלת — לא ל־100 גרם.</p>' +
+      f("cOK", "קלוריות", "קק״ל") + f("cOP", "חלבון", "ג׳") + f("cOC", "פחמימה", "ג׳") + f("cOF", "שומן", "ג׳") + "</div></div>" +
+      '<button class="btn pri" data-act="docustom">הוספה</button>');
   }
 
   // ---------- settings ----------
@@ -1192,17 +1272,27 @@
     var u = i.unit, f = function (fid, l, v, unit) { return '<div class="frow"><span>' + l + '</span><span class="fld"><input id="' + fid + '" type="number" inputmode="decimal" min="0" step="any" value="' + (v == null ? "" : Math.round(v * 10) / 10) + '">' + (unit ? "<span>" + unit + "</span>" : "") + "</span></div>"; };
     openSheet(head("עריכת ערכים", "✏️") + '<p class="nmdate">' + esc(i.name) + (i.custom ? "" : " · ערך מקורי של אקי נשמר, אפשר לחזור אליו") + "</p>" +
       '<div class="sh-body">' + (i.custom ? '<div class="frow"><span>שם</span><span class="fld wide"><input id="eName" type="text" maxlength="40" value="' + esc(i.name) + '" style="text-align:right"></span></div>' : "") +
-      f("eK", "קלוריות ל־100 ג׳", i.p.kcal, "") + f("eP", "חלבון ל־100 ג׳", i.p.protein, "ג׳") + f("eC", "פחמימה ל־100 ג׳", i.p.carbs, "ג׳") + f("eF", "שומן ל־100 ג׳", i.p.fat, "ג׳") +
-      '<div class="frow"><span>יחידה</span><span class="fld"><input id="eU" type="text" maxlength="20" placeholder="למשל: פרוסה" value="' + (u ? esc(cleanUnit(u.name_he)) : "") + '" style="text-align:right"></span></div>' +
-      f("eUG", "משקל יחידה", u ? u.grams : null, "ג׳") + '<p class="hint">ארוחות שכבר נשמרו לא משתנות. הערכים החדשים ישמשו מעכשיו בבניית ארוחה.</p></div>' +
+      (i.portion
+        ? f("eK", "קלוריות לפורציה", i.p.kcal, "") + f("eP", "חלבון לפורציה", i.p.protein, "ג׳") + f("eC", "פחמימה לפורציה", i.p.carbs, "ג׳") + f("eF", "שומן לפורציה", i.p.fat, "ג׳")
+        : f("eK", "קלוריות ל־100 ג׳", i.p.kcal, "") + f("eP", "חלבון ל־100 ג׳", i.p.protein, "ג׳") + f("eC", "פחמימה ל־100 ג׳", i.p.carbs, "ג׳") + f("eF", "שומן ל־100 ג׳", i.p.fat, "ג׳") +
+          '<div class="frow"><span>יחידה</span><span class="fld"><input id="eU" type="text" maxlength="20" placeholder="למשל: פרוסה" value="' + (u ? esc(cleanUnit(u.name_he)) : "") + '" style="text-align:right"></span></div>' +
+          f("eUG", "משקל יחידה", u ? u.grams : null, "ג׳")) +
+      '<p class="hint">ארוחות שכבר נשמרו לא משתנות. הערכים החדשים ישמשו מעכשיו בבניית ארוחה.</p></div>' +
       '<button class="btn pri" data-act="saveing" data-id="' + id + '">שמירת הערכים</button>', "edit");
   }
   function saveIng(id) {
     var i = ING[id], num = function (k) { var v = parseFloat(document.getElementById(k).value); return isFinite(v) && v >= 0 ? v : null; };
     var p100 = { kcal: num("eK"), protein: num("eP"), carbs: num("eC"), fat: num("eF") };
-    if (p100.kcal === null) { toast("צריך קלוריות ל־100 ג׳"); return; }
+    if (p100.kcal === null) { toast(i.portion ? "צריך קלוריות לפורציה" : "צריך קלוריות ל־100 ג׳"); return; }
     ["protein", "carbs", "fat"].forEach(function (k) { if (p100[k] === null) p100[k] = 0; });
-    var un = (document.getElementById("eU").value || "").trim(), ug = num("eUG");
+    if (i.custom && i.portion) {
+      var nm0 = (document.getElementById("eName").value || "").trim() || i.name;
+      S.updateCustom(id, { name_he: nm0, portion: true, per_portion: p100 });
+      loadIngredients();
+      if (location.hash.indexOf("#/db") === 0) refreshDB(); else if (draft && location.hash.indexOf("#/build") === 0) refreshBuild();
+      sheetIng(id); toast("הערכים עודכנו: " + ING[id].name.split(",")[0]); return;
+    }
+    var un = ((document.getElementById("eU") || {}).value || "").trim(), ug = num("eUG");
     var origUnit = i.unit ? cleanUnit(i.unit.name_he) : "", unit = un && ug > 0 ? { name_he: un === origUnit && i.unit ? i.unit.name_he : un, grams: ug } : null;
     if (i.custom) {
       var nm = (document.getElementById("eName").value || "").trim() || i.name;
@@ -1220,7 +1310,7 @@
   }
   function sheetIng(id) {
     var i = ING[id]; if (!i) return;
-    var cols = [{ t: "ל־100 ג׳", s: "", g: 100 }].concat(i.units.slice(0, 2).map(function (u) { return { t: esc(cleanUnit(u.name_he)), s: n(r0(u.grams)) + " ג׳", g: u.grams }; }));
+    var cols = i.portion ? [{ t: "לפורציה", s: "", g: 100 }] : [{ t: "ל־100 ג׳", s: "", g: 100 }].concat(i.units.slice(0, 2).map(function (u) { return { t: esc(cleanUnit(u.name_he)), s: n(r0(u.grams)) + " ג׳", g: u.grams }; }));
     var line = function (label, key, unit) { return '<div class="nr"><span>' + label + "</span>" + cols.map(function (c) { var v = valsFor(i, c.g)[key]; return '<b class="n">' + (key === "kcal" ? Math.round(v) : r0(v)) + (unit ? "<small>" + unit + "</small>" : "") + "</b>"; }).join("") + "</div>"; };
     var more = i.units.slice(2).map(function (u) { return '<div class="mu">' + esc(cleanUnit(u.name_he)) + " · " + n(r0(u.grams)) + " ג׳ · " + n(Math.round(valsFor(i, u.grams).kcal)) + " קלוריות</div>"; }).join("");
     openSheet(head(esc(i.name), CAT_IC[i.cat] || "🥣") +
@@ -1239,7 +1329,7 @@
 
   document.addEventListener("click", function (ev) {
     var t = ev.target, el;
-    if (fab.el && fab.el.classList.contains("open") && !t.closest("#tipfab")) tipClose();
+    if (fab.held) { ev.preventDefault(); fab.held = false; return; }
     if ((el = t.closest("[data-act]"))) {
       var a = el.getAttribute("data-act");
       switch (a) {
@@ -1269,7 +1359,7 @@
           if (editing) S.updateMeal(key, editing, { type: draft.meal, items: items, dishes: used }); else S.addMeal(key, { type: draft.meal, items: items, dishes: used });
           S.recordUse(items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { return i.ingId; }).concat(Object.keys(draft.added).map(function (d) { return "dish:" + d; })));
           var mt = mealInfo(draft.meal).title; draft = null; buzz();
-          if (key === today) { var pr = S.prefs(); S.setPrefs({ tip: { date: today, hidden: false, rot: (pr.tip.rot || 0) + 1 } }); ui.celebrate = { before: before, edited: !!editing, msg: editing ? mt + " עודכנה" : mt + " נוספה לסך היומי" }; go("#/"); }
+          if (key === today) { ui.celebrate = { before: before, edited: !!editing, msg: editing ? mt + " עודכנה" : mt + " נוספה לסך היומי" }; go("#/"); }
           else { go("#/day/" + key); toast(editing ? mt + " עודכנה" : mt + " נוספה ל" + dayLabel(key)); }
           return;
         case "savedish": if (!draftSnap().length) return; var already = savedDish(); if (already) { toast("כבר שמור ב־★ · " + already.name); return; } sheetSaveDish(); return;
@@ -1295,11 +1385,29 @@
           addDishToDraft(dva, ui.dvQty || 1); closeSheet(); refreshBuild(); toast("נוסף לארוחה: " + dva.name); return;
         case "dvedit": closeSheet(); sheetDish(ui.dvDish); return;
         case "dvdel": closeSheet(); delDish(ui.dvDish); return;
+        case "cmode":
+          ui.customMode = el.getAttribute("data-mode") === "own" ? "own" : "p100";
+          var p100 = document.getElementById("cP100"), own = document.getElementById("cOwn");
+          if (p100) p100.hidden = ui.customMode !== "p100";
+          if (own) own.hidden = ui.customMode !== "own";
+          document.querySelectorAll(".ctabs [data-mode]").forEach(function (b) {
+            var on = b.getAttribute("data-mode") === ui.customMode; b.classList.toggle("on", on); b.setAttribute("aria-selected", on);
+          });
+          return;
         case "docustom":
-          var cn = (document.getElementById("cName").value || "").trim(); var num = function (id) { return parseFloat(document.getElementById(id).value); };
+          var cn = (document.getElementById("cName").value || "").trim(); var num = function (id) { var eln = document.getElementById(id); return eln ? parseFloat(eln.value) : NaN; };
+          var cat = (document.getElementById("cCat") || {}).value || "other";
+          if ((ui.customMode || "p100") === "own") {
+            var ok = num("cOK"); if (!cn || !(ok >= 0)) { toast("צריך שם וקלוריות"); return; }
+            var c = S.addCustom({ name_he: cn, category: cat, portion: true, per_portion: { kcal: ok, protein: num("cOP") || 0, carbs: num("cOC") || 0, fat: num("cOF") || 0 } });
+            loadIngredients(); closeSheet(); toast("נוסף: " + cn);
+            if (draft && location.hash.indexOf("#/build") === 0) { setQty(c.id, "u", 1); draft.tab = c.category; draft.q = ""; renderBuild(); }
+            else if (location.hash.indexOf("#/db") === 0) { ui.dbCat = "mine"; ui.dbQ = ""; renderDB(); }
+            return;
+          }
           var k = num("cK"); if (!cn || !(k >= 0)) { toast("צריך שם וקלוריות ל־100 ג׳"); return; }
-          var unitName = (document.getElementById("cU").value || "").trim(), ug = num("cUG");
-          var c = S.addCustom({ name_he: cn, category: document.getElementById("cCat").value, per_100g: { kcal: k, protein: num("cP") || 0, carbs: num("cC") || 0, fat: num("cF") || 0 }, units: unitName && ug > 0 ? [{ name_he: unitName, grams: ug }] : [] });
+          var unitName = ((document.getElementById("cU") || {}).value || "").trim(), ug = num("cUG");
+          var c = S.addCustom({ name_he: cn, category: cat, per_100g: { kcal: k, protein: num("cP") || 0, carbs: num("cC") || 0, fat: num("cF") || 0 }, units: unitName && ug > 0 ? [{ name_he: unitName, grams: ug }] : [] });
           loadIngredients(); closeSheet(); toast("נוסף: " + cn);
           if (draft && location.hash.indexOf("#/build") === 0) { draft.tab = c.category; draft.q = ""; renderBuild(); } else if (location.hash.indexOf("#/db") === 0) { ui.dbCat = c.category; ui.dbQ = ""; renderDB(); }
           return;
@@ -1311,9 +1419,56 @@
         case "fixcancel": var fi = document.getElementById("fixIn"); if (fi) fi.value = ""; ui.fixAdding = false; renderSettings(); return;
         case "menu": openMenu(); return;
         case "goals": closeSheet(); sheetGoal(); return;
-        case "tipopen": if (fab.el.classList.contains("open")) tipClose(); else tipOpen(false); return;
-        case "tipclose": tipClose(); return;
-        case "tipnext": var rt = tipRot() + 1, x0 = tipNow(); S.setPrefs({ tip: { date: S.dateKey(), hidden: false, rot: rt, seenKey: tipKey(x0) } }); document.getElementById("tiptext").textContent = tipText(x0.cat, rt); clearTimeout(fab.autoClose); return;
+        case "waterfab":
+          if (fab.held) { fab.held = false; return; }
+          ensureCup("open");
+          return;
+        case "wateradd":
+          if ((S.waterPrefs().cupMl || 0) < 50) { sheetCupSize("log"); return; }
+          logCup(); return;
+        case "watercup":
+          S.setWaterPrefs({ cupMl: parseInt(el.getAttribute("data-ml"), 10) });
+          if (ui.waterThen === "log") { ui.waterThen = "open"; logCup(); if ($sheet.querySelector(".water")) openWater(); }
+          else if ($sheet.querySelector(".water")) { if ($sheet.querySelector(".water.cups") || $sheet.querySelector("#wcustom")) { /* cup-size sheet: just mark */ document.querySelectorAll(".wcups button").forEach(function (b) { b.classList.toggle("on", b === el); }); var cx = document.getElementById("wcustom"); if (cx) cx.hidden = true; }
+            else openWater(); }
+          return;
+        case "watercupx":
+          var cx2 = document.getElementById("wcustom"); if (cx2) { cx2.hidden = false; document.querySelectorAll(".wcups button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-act") === "watercupx"); }); var inp = document.getElementById("wCupMl"); if (inp) inp.focus(); }
+          else sheetCupSize(ui.waterThen || "open");
+          return;
+        case "watercupedit": sheetCupSize("open"); return;
+        case "savecup":
+          var chosen = document.querySelector(".wcups button.on");
+          var mlc = 0;
+          if (chosen && chosen.getAttribute("data-ml")) mlc = parseInt(chosen.getAttribute("data-ml"), 10);
+          else mlc = parseInt(((document.getElementById("wCupMl") || {}).value || "0"), 10);
+          if (!(mlc >= 50 && mlc <= 2000)) { toast("צריך גודל כוס בין 50 ל־2,000 מ״ל"); return; }
+          S.setWaterPrefs({ cupMl: mlc });
+          var then = ui.waterThen || "open"; ui.waterThen = null;
+          if (then === "log") { closeSheet(); logCup(); }
+          else if (then === "keep") closeSheet();
+          else openWater();
+          return;
+        case "waterundo":
+          var logs = S.water().logs; if (!logs.length) return;
+          S.undoWater(logs[logs.length - 1].id);
+          if (needHomePaint()) renderHome();
+          openWater(); fabPaint(); toast("הכוס האחרונה בוטלה"); return;
+        case "waterglass":
+          if ((S.waterPrefs().cupMl || 0) < 50) { sheetCupSize("open"); return; }
+          var cup = S.waterPrefs().cupMl, idx = parseInt(el.getAttribute("data-i"), 10);
+          var have = Math.round(S.water().ml / cup);
+          if (idx < have) {
+            // tap a filled glass (or the last filled) → undo down to this index (remove this one)
+            var drop = have - idx;
+            var lg = S.water().logs.slice();
+            for (var r = 0; r < drop && lg.length; r++) { S.undoWater(lg[lg.length - 1].id); lg.pop(); }
+          } else {
+            var addn = idx + 1 - have;
+            for (var a = 0; a < addn; a++) S.addWater(cup);
+          }
+          if (needHomePaint()) renderHome();
+          openWater(); fabPaint(); return;
         case "editing": sheetEditIng(el.getAttribute("data-id")); return;
         case "saveing": saveIng(el.getAttribute("data-id")); return;
         case "resetinge": if (!arm(el, "rst" + el.getAttribute("data-id"))) return; S.resetOverride(el.getAttribute("data-id")); loadIngredients(); if (location.hash.indexOf("#/db") === 0) refreshDB(); sheetIng(el.getAttribute("data-id")); toast("חזרנו לערכים המקוריים של אקי"); return;
@@ -1368,7 +1523,12 @@
     if ((el = t.closest(".dbdish[data-editdish]"))) { sheetDish(el.getAttribute("data-editdish")); return; }   // v11: saved dishes in the values DB
     if (!draft) return;
     if ((el = t.closest("[data-tab]"))) { draft.tab = el.getAttribute("data-tab"); draft.q = ""; var qi = document.getElementById("q"); if (qi) qi.value = ""; renderBuild(); return; }
-    if ((el = t.closest("[data-add]"))) { var ing = ING[el.getAttribute("data-add")]; setQty(ing.id, ing.defMode, ing.defMode === "u" ? 1 : 100); refreshBuild(); return; }
+    if ((el = t.closest("[data-add]"))) {
+      var aid = el.getAttribute("data-add");
+      if (draft.items[aid]) setQty(aid, draft.items[aid].mode, 0);
+      else { var ing = ING[aid]; if (!ing) return; setQty(ing.id, ing.defMode, ing.defMode === "u" ? 1 : 100); }
+      refreshBuild(); return;
+    }
     if ((el = t.closest("[data-rm]"))) { setQty(el.getAttribute("data-rm"), "g", 0); refreshBuild(); toast("הוסר מהארוחה"); return; }
     if ((el = t.closest("[data-rmfix]"))) { draft.fixed.splice(+el.getAttribute("data-rmfix"), 1); refreshBuild(); toast("הוסר מהארוחה"); return; }
     if ((el = t.closest("[data-deldish]"))) { delDish(el.getAttribute("data-deldish")); return; }
