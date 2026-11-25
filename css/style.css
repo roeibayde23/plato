@@ -1,6 +1,7 @@
 @font-face{font-family:"Assistant";src:url("../fonts/assistant.ttf") format("truetype");font-weight:200 800;font-display:swap}
 @font-face{font-family:"Frank Ruhl Libre";src:url("../fonts/frank-ruhl-libre.ttf") format("truetype");font-weight:300 900;font-display:swap}
 :root{--bg:#F5F0E6;--paper:#FBF8F1;--g:#4E9A3A;--gd:#2E6B2A;--gl:#EEF3E4;--gt:#E3EDD9;--br:#7A5A3F;--brd:#5A4330;--brl:#EFE4D3;--fat:#C2A878;--ln:#DDD3C1;--ln2:#E8E0D0;--mut:#8b8274;--faint:#B3A894;--ink:#2b2a26;
+  --hd-bg:#C9D4A3; /* v14: screen header color — olive (Roei's pick); brown #E2C79A · terracotta #E5B494 */
   --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--bg);color:var(--ink);font-family:Assistant,Heebo,system-ui,sans-serif;font-size:16px}
@@ -13,8 +14,8 @@ input,select{font:inherit;color:inherit}
 .emoji{font-family:"Apple Color Emoji","Noto Color Emoji","Segoe UI Emoji",sans-serif}
 
 /* ---------- home ---------- */
-.home{padding:calc(var(--st) + 10px) 0 calc(var(--sb) + 28px)}
-.hd{display:flex;align-items:center;gap:10px;padding:4px 22px 0}
+.home{padding:0 0 calc(var(--sb) + 28px)}
+.hd{display:flex;align-items:center;gap:10px;padding:calc(var(--st) + 10px) 22px 14px;background:var(--hd-bg);margin-bottom:6px}
 .hd img{width:36px;height:36px}.hd b{font:700 15px Assistant;letter-spacing:4px;color:var(--gd)}
 .hd .date{margin-inline-start:auto;color:var(--mut);font-size:14px}
 .gear{width:40px;height:40px;border:1.5px solid var(--ln);border-radius:12px;background:var(--paper);display:flex;align-items:center;justify-content:center}
@@ -54,8 +55,8 @@ input,select{font:inherit;color:inherit}
 .btn.danger.armed{background:#9A4A33;color:#fff;border-color:#9A4A33}
 
 /* ---------- build ---------- */
-.build{height:100dvh;display:flex;flex-direction:column;padding-top:calc(var(--st) + 8px)}
-.top{display:flex;align-items:center;justify-content:space-between;padding:2px 22px 0}
+.build{height:100dvh;display:flex;flex-direction:column;padding-top:0}
+.top{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--st) + 10px) 22px 12px;background:var(--hd-bg)}
 .top h2{font:700 22px "Frank Ruhl Libre";color:var(--brd)}
 .top .x{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--mut)}
 .search{margin:10px 18px 0;position:relative}
@@ -116,7 +117,7 @@ input,select{font:inherit;color:inherit}
 .rb:disabled{opacity:.45}
 
 /* ---------- settings ---------- */
-.set{padding:calc(var(--st) + 14px) 0 calc(var(--sb) + 40px)}
+.set{padding:0 0 calc(var(--sb) + 40px)}
 .back{padding:6px 22px 0;color:var(--gd);font:700 15px Assistant}
 .set h1{font:700 30px "Frank Ruhl Libre";color:var(--brd);padding:6px 22px 4px}
 .gt{font:700 13px Assistant;color:var(--mut);padding:20px 26px 8px}
@@ -634,7 +635,7 @@ input.fromlabel{color:#2F5F2C}
 /* ---------- v12 ---------- */
 /* values DB: "הוספה" at the top-left of the header */
 .dbp{position:relative}
-.hdadd{position:absolute;left:18px;top:calc(var(--st) + 14px);height:36px;padding:0 14px;border-radius:12px;border:1.5px solid var(--g);background:var(--paper);color:var(--gd);font:700 15px Assistant;display:inline-flex;align-items:center;gap:4px;z-index:2}
+.hdadd{position:absolute;left:18px;top:calc(var(--st) + 8px);height:36px;padding:0 14px;border-radius:12px;border:1.5px solid var(--g);background:var(--paper);color:var(--gd);font:700 15px Assistant;display:inline-flex;align-items:center;gap:4px;z-index:2}
 .hdadd:active{background:var(--gl)}
 /* builder: chosen items (in the meal) get the soft calories light-brown */
 .r4.on,.r4.dish.added,.dsw .r4.dish.added{background:#F3E7D6}
@@ -698,3 +699,22 @@ input.fromlabel{color:#2F5F2C}
 .onb .card.ogf{margin:0}
 .oback{align-self:center;margin-top:12px;padding:10px 16px}
 .onb input::placeholder{color:#CDC2AE;font-weight:500}
+
+
+/* ---------- v14: colored screen header, meal thumbnails, weekly met/miss bars ---------- */
+.phd{background:var(--hd-bg);padding:calc(var(--st) + 8px) 0 14px;margin-bottom:10px}
+ .phd .back{height:36px;padding:0 22px;display:inline-flex;align-items:center}
+.phd h1,.set .phd h1{padding-bottom:0}
+.insp .phd .ichips{display:none} /* chips sit under the bar (rendered after .phd) */
+.ml .mph{width:46px;height:46px;border-radius:12px;background:#EFE8DA center/cover no-repeat;border:1px solid var(--ln);flex:0 0 auto}
+.ml .mph.has{border-color:transparent}
+/* weekly bars: green = met the calorie goal, red = logged but missed it; empty days stay the faint tick */
+.bars .d.met i,.home .bars .d.met i,.bars.tall .d.met i{background:var(--g);opacity:1}
+.bars .d.miss i,.home .bars .d.miss i,.bars.tall .d.miss i{background:#C45C42;opacity:1}
+.bars .d.today.met i,.home .bars .d.today.met i,.bars.tall .d.today.met i{background:var(--g);box-shadow:inset 0 0 0 1.5px var(--gd)}
+.bars .d.today.miss i,.home .bars .d.today.miss i,.bars.tall .d.today.miss i{background:#C45C42;box-shadow:inset 0 0 0 1.5px #8A3020}
+.bars.kvb .d.met .kv,.bars.tall .d.met .v{color:var(--gd)}
+.bars.kvb .d.miss .kv,.bars.tall .d.miss .v{color:#9A3B2A}
+.bars .d.today.met,.bars .d.today.miss{font-weight:700}
+.wr.met .wk2 b{color:var(--gd)}
+.wr.miss .wk2 b{color:#9A3B2A}

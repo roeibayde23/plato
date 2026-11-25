@@ -199,10 +199,21 @@
     return '<button class="hero v-' + v + (over ? " over" : "") + '" data-act="goals" aria-label="יעדים"><div class="ringwrap" id="ringwrap">' + ringsSVG(v, f, to) + center + "</div>" +
       '<div class="legend">' + (v === "A" ? lg("kcal", "קלוריות", eaten, g.kcal, "") : "") + macros + "</div></button>";
   }
+  // v14: a logged day "met" its calorie goal when —
+  //   lose: at or under the goal (kcal ≤ goal);
+  //   maintain / gain (and anyone who hasn't picked a goal type): within ±10% of the goal.
+  // A day with no meals is neither met nor missed (the bar stays the empty style).
+  function goalKind() { var t = (S.prefs() || {}).goalType; return t === "lose" || t === "gain" || t === "keep" ? t : "keep"; }
+  function dayGoalClass(kcal) {
+    if (!(kcal > 0)) return "";
+    var g = S.goal().kcal;
+    if (goalKind() === "lose") return kcal <= g ? "met" : "miss";
+    return kcal >= g * 0.9 && kcal <= g * 1.1 ? "met" : "miss";
+  }
   function weekMini(g) {
     var now = new Date(), week = [], sum = 0, cnt = 0, maxV = g.kcal * 1.15, H = 66;
     for (var i = 6; i >= 0; i--) { var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), k = S.day(S.dateKey(d)).totals.kcal; week.push({ d: d, k: k, today: i === 0 }); if (k > 0) { sum += k; cnt++; if (k > maxV) maxV = k; } }
-    var bars = week.map(function (w) { var h = w.k > 0 ? Math.max(4, Math.round(w.k / maxV * H)) : 0; return '<div class="d' + (w.today ? " today" : "") + (w.k > 0 ? "" : " none") + (w.k > g.kcal * 1.05 ? " over" : "") + '"><span class="kv n">' + (w.k > 0 ? fmt(w.k) : "") + '</span><i style="' + (h ? "height:" + h + "px" : "") + '"></i>' + DAYS[w.d.getDay()] + "</div>"; }).join("");
+    var bars = week.map(function (w) { var h = w.k > 0 ? Math.max(4, Math.round(w.k / maxV * H)) : 0, st = dayGoalClass(w.k); return '<div class="d' + (w.today ? " today" : "") + (w.k > 0 ? "" : " none") + (st ? " " + st : "") + '"><span class="kv n">' + (w.k > 0 ? fmt(w.k) : "") + '</span><i style="' + (h ? "height:" + h + "px" : "") + '"></i>' + DAYS[w.d.getDay()] + "</div>"; }).join("");
     var goalTop = 22 + (H - Math.round(g.kcal / maxV * H));   // v11: no average in the header; each bar shows its kcal
     return '<button class="sec link" data-go="#/weekly"><b>מעקב שבועי</b><span>לפירוט ←</span></button>' +
       '<button class="wk wkcard" data-go="#/weekly" aria-label="מעקב שבועי"><div class="bars kvb"><span class="gl" style="top:' + goalTop + 'px"></span>' + bars + "</div></button>";
@@ -212,7 +223,9 @@
     var now = new Date(), g = S.goal(), day = S.day(S.dateKey(now)), t = day.totals, cel = ui.celebrate; ui.celebrate = null;
     var meals = day.meals.map(function (m) {
       var names = m.items.map(function (i) { return i.name.split(",")[0]; }).join(" · ");
-      return '<button class="ml" data-meal="' + m.id + '"><span class="mi emoji">' + mealInfo(m.type).ic + '</span><span class="t"><b>' + esc(m.type) + "</b><span>" + esc(names) + '</span></span><span class="k"><b class="n">' + fmt(m.totals.kcal) + "</b><span>" + n(Math.round(m.totals.protein)) + " ג׳ חלבון</span></span></button>";
+      var ph = mealPhotoId(m);
+      var ic = ph ? '<span class="mph" data-dimg="' + ph + '" role="img" aria-label="תמונת הארוחה"></span>' : '<span class="mi emoji">' + mealInfo(m.type).ic + "</span>";
+      return '<button class="ml" data-meal="' + m.id + '">' + ic + '<span class="t"><b>' + esc(m.type) + "</b><span>" + esc(names) + '</span></span><span class="k"><b class="n">' + fmt(m.totals.kcal) + "</b><span>" + n(Math.round(m.totals.protein)) + " ג׳ חלבון</span></span></button>";
     }).join("");
     $app.innerHTML =
       '<div class="home">' +
@@ -223,6 +236,7 @@
       '<div class="cta"><button class="btn pri" data-act="newmeal">＋ ארוחה חדשה</button></div>' +
       weekMini(g) +
       "</div>";
+    hydrate($app);   // v14: meal thumbnails from the saved-dish photo
     if (cel) { var cmsg = cel.msg; celebrate(); fabCheer(cmsg); }
   }
 
@@ -444,7 +458,7 @@
     var chip = function (k, label) { return '<button class="ichip' + (k === key ? " on" : "") + '" data-go="#/insights/' + k + '"' + (k === key ? ' aria-current="date"' : "") + ">" + label + "</button>"; };
     var nav = '<div class="dnav inav"><button class="ib" data-go="#/insights/' + shiftKey(key, -1) + '" aria-label="יום קודם">' + ICON.chevR + "</button><div class=\"ititle\"><h1>מסקנות</h1><div class=\"isub\">" + dateHead(key) + '</div></div><button class="ib" data-go="#/insights/' + shiftKey(key, 1) + '" aria-label="יום הבא"' + (key >= tk ? " disabled" : "") + ">" + ICON.chevL + "</button></div>" +
       '<div class="ichips">' + chip(tk, "היום") + chip(yk, "אתמול") + chip(wk, "לפני שבוע") + "</div>";
-    $app.innerHTML = '<div class="set insp">' + back + nav + (today && x.partial && !x.empty ? '<div class="sofar">⏳ עד עכשיו · מתעדכן לאורך היום</div>' : "") + '<p class="lead">' + insHead(x, key) + "</p>" +
+    $app.innerHTML = '<div class="set insp"><div class="phd">' + back + nav.split('<div class="ichips">')[0] + '</div><div class="ichips">' + nav.split('<div class="ichips">')[1] + (today && x.partial && !x.empty ? '<div class="sofar">⏳ עד עכשיו · מתעדכן לאורך היום</div>' : "") + '<p class="lead">' + insHead(x, key) + "</p>" +
       (x.empty ? '<div class="empty-card">כשיהיו ארוחות רשומות — יופיע כאן מה היה טוב ומה חסר</div>' :
         sec("good", "✅", "מה היה טוב", x.good) + sec("miss", "⚠️", "מה חסר", x.miss) + sec("focus", "🎯", "על מה לשים דגש", x.focus)) +
       '<div class="cta"><button class="btn sec2" data-go="#/day/' + key + '">לפירוט הארוחות</button></div></div>';
@@ -486,8 +500,8 @@
       var pts = (x.miss.length && x.miss[0].indexOf("כמעט כלום") !== 0 ? x.miss : x.good).slice(0, 3);
       tease = '<button class="card dtease" data-go="#/insights/' + key + '"><span class="tx"><b>מסקנות' + (key === today && x.partial ? ' <small>· עד עכשיו</small>' : "") + "</b>" + pts.join(" · ") + '</span><span class="go">לכל המסקנות ←</span></button>';
     }
-    $app.innerHTML = '<div class="set dayp dayc"><button class="back" data-go="#/weekly">→ מעקב שבועי</button>' +
-      '<div class="dnav"><button class="ib" data-go="#/day/' + shiftKey(key, -1) + '" aria-label="יום קודם">' + ICON.chevR + '</button><h1>' + dayLabel(key) + '</h1><button class="ib" data-go="#/day/' + shiftKey(key, 1) + '" aria-label="יום הבא"' + (key >= today ? " disabled" : "") + ">" + ICON.chevL + "</button></div>" +
+    $app.innerHTML = '<div class="set dayp dayc"><div class="phd"><button class="back" data-go="#/weekly">→ מעקב שבועי</button>' +
+      '<div class="dnav"><button class="ib" data-go="#/day/' + shiftKey(key, -1) + '" aria-label="יום קודם">' + ICON.chevR + '</button><h1>' + dayLabel(key) + '</h1><button class="ib" data-go="#/day/' + shiftKey(key, 1) + '" aria-label="יום הבא"' + (key >= today ? " disabled" : "") + ">" + ICON.chevL + "</button></div></div>" +
       '<div class="card dsum">' + row("dk", "קלוריות", T.kcal, t.kcal, g.kcal, "", false) + row("dp", "חלבון", T.protein, t.protein, g.protein, gram, true) + row("dc", "פחמימה", T.carbs, t.carbs, g.carbs, gram, false) + row("df", "שומן", T.fat, t.fat, g.fat, gram, false) + "</div>" +
       (meals.length ? '<div class="card dtab"><div class="dth"><span>ארוחה</span><span>קל׳</span><span>חלבון</span><span>פחמ׳</span><span>שומן</span><span></span></div>' + rows + "</div>"
         : '<div class="empty-card">לא נרשמו ארוחות ביום הזה</div>') +
@@ -533,6 +547,7 @@
     });
     var cat = m.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { return ING[i.ingId].cat; })[0];
     if (cat) draft.tab = cat;
+    (m.dishes || []).forEach(function (x) { var id = typeof x === "string" ? x : x.id, n = (typeof x === "object" && x.n) || 1; if (id) draft.added[id] = (draft.added[id] || 0) + n; });
     closeSheet(); go("#/build");
   }
 
@@ -582,6 +597,17 @@
     });
   }
   function thumb(d, cls) { return d.photo ? '<span class="dph ' + (cls || "") + '" data-dimg="' + d.id + '" role="img" aria-label="תמונת המנה"></span>' : '<span class="dph ' + (cls || "") + ' none" aria-hidden="true">🍽️</span>'; }
+  // v14: the photo to show on a logged meal — a saved dish used in it that still has a photo, or an exact match to a saved dish
+  function mealDishIds(m) {
+    return (m.dishes || []).map(function (x) { return typeof x === "string" ? x : x.id; }).filter(Boolean);
+  }
+  function mealPhotoId(m) {
+    var ids = mealDishIds(m), list = S.dishes(), i, d;
+    for (i = 0; i < ids.length; i++) { d = list.filter(function (x) { return x.id === ids[i]; })[0]; if (d && d.photo) return d.id; }
+    var sg = dishSig({ items: m.items || [] });
+    d = list.filter(function (x) { return x.photo && dishSig(x) === sg; })[0];
+    return d ? d.id : null;
+  }
   function photoPicker(cur) {
     return '<div class="phpick"><div class="pv" id="phpv"' + (cur ? ' style="background-image:url(' + cur + ')"' : "") + ">" + (cur ? "" : "<span>🍽️</span>") + "</div>" +
       '<div class="pb"><label class="btn sm2">' + ICON.camera + ' צילום<input type="file" accept="image/*" capture="environment" id="dishPhoto" hidden></label>' +
@@ -602,9 +628,9 @@
     var d = S.dishes().filter(function (x) { return x.id === id; })[0]; if (!d) return;
     ui.pendPhoto = undefined; ui.editDish = id;
     var lines = d.items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { var s2 = snapshot(i.ingId, i); return '<div class="ln"><span class="q">' + itemQtyLabel(s2) + '</span><span class="nm">' + esc(s2.name) + '</span><span class="kc n">' + fmt(s2.kcal) + "</span></div>"; }).join("");
-    openSheet(head("המנה השמורה", "🔖") + '<div class="sh-body">' + photoPicker(null) +
+    openSheet(head("המנה השמורה", "🔖") + '<p class="sublead">אפשר לשנות את השם ולהוסיף או להחליף תמונה מהמצלמה או מהגלריה.</p><div class="sh-body">' + photoPicker(null) +
       '<div class="frow"><span>שם המנה</span><span class="fld wide"><input id="dishName" type="text" maxlength="40" value="' + esc(d.name) + '"></span></div></div>' +
-      '<div class="items">' + lines + '</div><button class="btn pri" data-act="doeditdish">שמירה</button>');
+      '<div class="items">' + lines + '</div><button class="btn pri" data-act="doeditdish">שמירה</button><button class="btn danger" data-act="deldbdish">מחיקת המנה</button>');
     if (d.photo) imgGet(id, function (u) { if (u && ui.pendPhoto === undefined) { setPend(u); ui.pendPhoto = undefined; } });
   }
   // v12: saved-dish detail (builder ★): photo, ingredients with amounts, per-serving kcal + macros, quantity, "הוספה לארוחה", ✏️ / 🗑
@@ -643,8 +669,9 @@
     commitDel();
     pendDel = { d: d }; S.deleteDish(id); if (draft) delete draft.added[id];
     if (draft && document.getElementById("list")) refreshBuild();
+    if ((location.hash || "").indexOf("#/db") === 0) refreshDB();
     toast._done = commitDel;
-    toast("המנה נמחקה · " + d.name, "ביטול", function () { var p = pendDel; pendDel = null; toast._done = null; if (!p) return; S.restoreDish(p.d); if (draft && document.getElementById("list")) refreshBuild(); toast("המנה חזרה ★"); }, 5000);
+    toast("המנה נמחקה · " + d.name, "ביטול", function () { var p = pendDel; pendDel = null; toast._done = null; if (!p) return; S.restoreDish(p.d); if (draft && document.getElementById("list")) refreshBuild(); if ((location.hash || "").indexOf("#/db") === 0) refreshDB(); toast("המנה חזרה ★"); }, 5000);
   }
   function rowDish(d) {   // v12: tap the row = detail sheet (add from there) · ✏️ = edit (name/photo) · 🗑 or swipe left = delete (with undo)
     var v = dishTotals(d), a = draft.added[d.id];
@@ -762,7 +789,7 @@
     var cs = window.Cloud ? Cloud.status() : { on: false };
     var acct = cs.on ? row("account", "☁️", "", "חשבון", esc(cs.email) + ' · <span id="syncst" class="syncst ' + cs.state + '">' + syncText(cs) + "</span>")
       : '<button class="srow" data-go="#/login"><span class="tile emoji br">☁️</span><span class="st"><b>התחברות לחשבון</b><small>כרגע הנתונים רק בטלפון הזה · גיבוי וסנכרון בענן</small></span>' + ICON.chevL + "</button>";
-    $app.innerHTML = '<div class="set"><button class="back" data-act="home">→ חזרה</button><h1>הגדרות</h1>' +
+    $app.innerHTML = '<div class="set"><div class="phd"><button class="back" data-act="home">→ חזרה</button><h1>הגדרות</h1></div>' +
       '<div class="gt">חשבון וסנכרון</div><div class="card">' + acct + "</div>" +
       '<div class="gt">אני והיעד שלי</div><div class="card">' + row("profile", prof.photo ? '<img src="' + prof.photo + '" alt="">' : "👤", prof.photo ? "photo" : "", "פרופיל", esc(prof.name) + " · " + n(kg(prof.weight)) + " ק״ג") + row("goal", "🎯", "", "יעדים", n(fmt(gl.kcal)) + " קלוריות · " + n(gl.protein) + " ג׳ חלבון", "עריכה") + "</div>" +
       '<div class="gt">רק לך</div><div class="card fixes"><div class="srow" style="cursor:default"><span class="tile emoji br">🔧</span><span class="st"><b>שיפוצים</b><small>מה לתקן באפליקציה' + (fx.length ? " · " + n(open) + " פתוחים" : "") + "</small></span>" +
@@ -1055,7 +1082,7 @@
       mrow("#/weight", "⚖️", "", "מעקב משקל", wi ? n(kg(wi.last.kg)) + " ק״ג" + (wi.list.length > 1 ? " · " + n(signed(wi.change)) + " מההתחלה" : "") : "עוד אין שקילות") +
       '</div><div class="foot"><b>PLATO</b> · גרסה ' + n("v" + APP_VERSION) + "</div></nav></div>";
   }
-  function pageHead(title, lead) { return '<button class="back" data-act="home">→ חזרה</button><h1>' + title + "</h1>" + (lead ? '<p class="lead">' + lead + "</p>" : ""); }
+  function pageHead(title, lead) { return '<div class="phd"><button class="back" data-act="home">→ חזרה</button><h1>' + title + "</h1></div>" + (lead ? '<p class="lead">' + lead + "</p>" : ""); }
 
   // ---------- weekly ----------
   function renderWeekly() {
@@ -1069,12 +1096,14 @@
     var range = a.getMonth() === b.getMonth() ? n(a.getDate() + "–" + b.getDate()) + " " + MONTHS[b.getMonth()] : n(a.getDate()) + " " + MONTHS[a.getMonth()] + " – " + n(b.getDate()) + " " + MONTHS[b.getMonth()];
     var bars = week.map(function (w) {
       var h = w.k > 0 ? Math.max(4, Math.round(w.k / maxV * H)) : 0;
-      return '<div class="d' + (w.today ? " today" : "") + (w.k > 0 ? "" : " none") + (w.k > g.kcal ? " over" : "") + '" role="button" data-go="#/day/' + S.dateKey(w.d) + '"><span class="v n">' + (w.k > 0 ? fmt(w.k) : "") + '</span><i style="' + (h ? "height:" + h + "px" : "") + '"></i>' + DAYS[w.d.getDay()] + "</div>";
+      var st = dayGoalClass(w.k);
+      return '<div class="d' + (w.today ? " today" : "") + (w.k > 0 ? "" : " none") + (st ? " " + st : "") + '" role="button" data-go="#/day/' + S.dateKey(w.d) + '"><span class="v n">' + (w.k > 0 ? fmt(w.k) : "") + '</span><i style="' + (h ? "height:" + h + "px" : "") + '"></i>' + DAYS[w.d.getDay()] + "</div>";
     }).join("");
     var goalTop = 26 + (H - Math.round(g.kcal / maxV * H));
     var rows = week.slice().reverse().map(function (w) {
       var pct = Math.min(100, Math.round(w.k / Math.max(1, g.kcal) * 100));
-      return '<button class="wr' + (w.k > 0 ? "" : " none") + '" data-go="#/day/' + S.dateKey(w.d) + '"><span class="dn"><b>' + (w.today ? "היום" : "יום " + DAYNAME[w.d.getDay()]) + "</b><small>" + n(w.d.getDate()) + " " + MONTHS[w.d.getMonth()] + "</small></span>" +
+      var rst = dayGoalClass(w.k);
+      return '<button class="wr' + (w.k > 0 ? "" : " none") + (rst ? " " + rst : "") + '" data-go="#/day/' + S.dateKey(w.d) + '"><span class="dn"><b>' + (w.today ? "היום" : "יום " + DAYNAME[w.d.getDay()]) + "</b><small>" + n(w.d.getDate()) + " " + MONTHS[w.d.getMonth()] + "</small></span>" +
         (w.k > 0 ? '<span class="wv"><span class="bar"><i style="width:' + pct + '%"></i></span><small>' + n(Math.round(w.p)) + ' ג׳ חלבון</small></span><span class="wk2"><b class="n">' + fmt(w.k) + "</b><small>קלוריות</small></span>" : '<span class="wv"><small>לא נרשם · אפשר להוסיף</small></span><span class="wk2"><b>—</b></span>') + ICON.chevL + "</button>";
     }).join("");
     $app.innerHTML = '<div class="set wkp">' + pageHead("מעקב שבועי") +
@@ -1233,7 +1262,8 @@
         case "addday":
           var items = draftSnap(); if (!items.length) { toast("עוד לא נבחרו מרכיבים"); return; }
           var key = draft.date, today = S.dateKey(), before = S.day(today).totals, editing = draft.editId;
-          if (editing) S.updateMeal(key, editing, { type: draft.meal, items: items }); else S.addMeal(key, { type: draft.meal, items: items });
+          var used = Object.keys(draft.added).filter(function (id) { return draft.added[id] > 0; }).map(function (id) { return { id: id, n: draft.added[id] }; });   // v14
+          if (editing) S.updateMeal(key, editing, { type: draft.meal, items: items, dishes: used }); else S.addMeal(key, { type: draft.meal, items: items, dishes: used });
           S.recordUse(items.filter(function (i) { return ING[i.ingId]; }).map(function (i) { return i.ingId; }).concat(Object.keys(draft.added).map(function (d) { return "dish:" + d; })));
           var mt = mealInfo(draft.meal).title; draft = null; buzz();
           if (key === today) { var pr = S.prefs(); S.setPrefs({ tip: { date: today, hidden: false, rot: (pr.tip.rot || 0) + 1 } }); ui.celebrate = { before: before, edited: !!editing, msg: editing ? mt + " עודכנה" : mt + " נוספה לסך היומי" }; go("#/"); }
@@ -1247,6 +1277,7 @@
         case "doeditdish":
           var en = (document.getElementById("dishName").value || "").trim(); if (!en) { toast("צריך שם למנה"); return; }
           S.updateDish(ui.editDish, { name: en }); savePhoto(ui.editDish, ui.pendPhoto, function () { closeSheet(); if (draft && document.getElementById("list")) refreshBuild(); if ((location.hash || "").indexOf("#/db") === 0) refreshDB(); toast("המנה עודכנה"); }); return;
+        case "deldbdish": if (!arm(el, "deldb" + ui.editDish)) return; var did = ui.editDish; closeSheet(); delDish(did); return;   // v14: confirm tap, then delete (undo toast still offered)
         case "rmdishphoto": setPend(null); return;
         case "scanlabel":   // pre-check so he isn't sent to the camera for nothing
           if (!window.Cloud || !Cloud.session()) { labelState("err", LABEL_ERR.signin); return; }
@@ -1414,7 +1445,7 @@
     if (t.id === "fixIn") return;   // handled by the form's submit event (works with the iOS keyboard's Done/Return key)
     if (t.id === "wNew") { ev.preventDefault(); document.querySelector('[data-act="addweight"]').click(); return; }
     if (t.id === "dbq") t.blur();
-    if (t.id === "dishName") { document.querySelector('[data-act="dosavedish"]').click(); return; }
+    if (t.id === "dishName") { var go = document.querySelector('[data-act="doeditdish"]') || document.querySelector('[data-act="dosavedish"]'); if (go) go.click(); return; }
     if (t.hasAttribute && (t.hasAttribute("data-qty") || t.hasAttribute("data-eq"))) t.blur();
     if (t.id === "q") t.blur();
   });

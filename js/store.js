@@ -132,12 +132,14 @@
       var s = st(); key = key || dateKey();
       if (!s.days[key]) s.days[key] = { meals: [] };
       var m = { id: uid(), userId: s.userId, type: meal.type, createdAt: Date.now(), u: Date.now(), items: meal.items, totals: sumTotals(meal.items) };
+      if (meal.dishes && meal.dishes.length) m.dishes = meal.dishes;   // v14: saved dishes used in this meal (for the home thumbnail)
       s.days[key].meals.push(m); save(); return clone(m);
     },
     updateMeal: function (key, id, meal) {
       var d = st().days[key]; if (!d) return null;
       var m = d.meals.filter(function (x) { return x.id === id; })[0]; if (!m) return null;
       m.type = meal.type || m.type; m.items = meal.items; m.totals = sumTotals(meal.items); m.editedAt = Date.now(); m.u = m.editedAt;
+      if (Array.isArray(meal.dishes)) { if (meal.dishes.length) m.dishes = meal.dishes; else delete m.dishes; }
       save(); return clone(m);
     },
     deleteMeal: function (key, id) {
