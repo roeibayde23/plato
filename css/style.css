@@ -708,13 +708,19 @@ input.fromlabel{color:#2F5F2C}
 .insp .phd .ichips{display:none} /* chips sit under the bar (rendered after .phd) */
 .ml .mph{width:46px;height:46px;border-radius:12px;background:#EFE8DA center/cover no-repeat;border:1px solid var(--ln);flex:0 0 auto}
 .ml .mph.has{border-color:transparent}
-/* weekly bars: green = met the calorie goal, red = logged but missed it; empty days stay the faint tick */
-.bars .d.met i,.home .bars .d.met i,.bars.tall .d.met i{background:var(--g);opacity:1}
-.bars .d.miss i,.home .bars .d.miss i,.bars.tall .d.miss i{background:#C45C42;opacity:1}
-.bars .d.today.met i,.home .bars .d.today.met i,.bars.tall .d.today.met i{background:var(--g);box-shadow:inset 0 0 0 1.5px var(--gd)}
-.bars .d.today.miss i,.home .bars .d.today.miss i,.bars.tall .d.today.miss i{background:#C45C42;box-shadow:inset 0 0 0 1.5px #8A3020}
-.bars.kvb .d.met .kv,.bars.tall .d.met .v{color:var(--gd)}
-.bars.kvb .d.miss .kv,.bars.tall .d.miss .v{color:#9A3B2A}
+/* v15 weekly bars: home = muted pastel; מעקב שבועי = stronger saturated. Green = kcal ≤ goal, red = kcal > goal. */
+.home .bars .d.met i,.home .bars .d.today.met i{background:#B5D0A6;opacity:1;box-shadow:none}
+.home .bars .d.miss i,.home .bars .d.today.miss i{background:#E5B8AE;opacity:1;box-shadow:none}
+.home .bars.kvb .d.met .kv{color:#6F8F64}
+.home .bars.kvb .d.miss .kv{color:#B57A70}
+.bars.tall .d.met i,.bars.tall .d.today.met i{background:var(--g);opacity:1;box-shadow:none}
+.bars.tall .d.miss i,.bars.tall .d.today.miss i{background:#C44732;opacity:1;box-shadow:none}
+.bars.tall .d.today.met i{box-shadow:inset 0 0 0 1.5px var(--gd)}
+.bars.tall .d.today.miss i{box-shadow:inset 0 0 0 1.5px #8A3020}
+.bars.tall .d.met .v{color:var(--gd)}
+.bars.tall .d.miss .v{color:#9A3B2A}
 .bars .d.today.met,.bars .d.today.miss{font-weight:700}
 .wr.met .wk2 b{color:var(--gd)}
-.wr.miss .wk2 b{color:#9A3B2A}
+.wr.miss .wk2 b{color:#C44732}
+.mchg{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:right;background:none;border:0;padding:0;cursor:pointer}
+.mchgl{font:700 12px Assistant;color:var(--gd);opacity:.85}

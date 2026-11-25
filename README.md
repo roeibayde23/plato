@@ -19,6 +19,7 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
     python3 test/v11.py http://127.0.0.1:8781/         # v11: no 🧠, weekly kcal per bar, targeted tips, ★ dishes in the values DB, label scan (needs deno)
     python3 test/v13.py http://127.0.0.1:8781/         # v13: one account = its own data (two users on one browser, sign-out clears the phone, old local data never uploaded), welcome flow (+ WebKit)
     python3 test/v14.py http://127.0.0.1:8781/         # v14: delete/rename/photo in the values DB, meal photo on home, colored header, weekly bars green/red
+    python3 test/v15.py http://127.0.0.1:8781/         # v15: kcal ≤ goal is green for every goal type, pastel bars on home / strong on weekly, edit a logged meal from home
     (cd supabase/functions/plato-label && deno test --allow-net --allow-env label_test.ts)   # plato-label function unit tests (fake Gemini + fake auth)
     PLATO_E2E_FILE=creds.json python3 test/v8_real.py  # real Supabase e2e with a throwaway, pre-confirmed account (OTP calls stubbed, no mail sent; delete it afterwards)
 Screenshots go to `shots/`.
@@ -50,6 +51,6 @@ Without the secret it answers `503 {"error":"not_configured"}` and the app says 
 
 ## Colored header & weekly goal colors (v14)
 - Screen title bars (home, settings, values DB, weekly, weight, day, insights, meal builder) use a single CSS variable `--hd-bg`. The default is olive (`#C9D4A3`, Roei's pick). Alternatives that fit the cream palette: warm brown `#E2C79A`, terracotta `#E5B494`.
-- Weekly bars (home + מעקב שבועי): a logged day is **green** when it met the calorie goal, **red** when it missed it. Empty days stay the faint tick. Rule: *lose* = at or under the goal; *maintain* / *gain* (and anyone who hasn't picked a goal type) = within ±10% of the goal.
+- Weekly bars: a logged day is **green** when calories are at or under the goal (`kcal ≤ goal`), **red** only when over the goal. Same rule for every goal type. Empty days stay the faint tick. Home mini-bars use muted pastel green/red; the full מעקב שבועי screen uses stronger, saturated colors.
 - Saved dishes can be deleted from the values DB (confirm tap, then the usual undo toast). The dish editor there already lets you rename and add/change a photo (camera or gallery, compressed).
 - A logged meal shows a thumbnail on the home list when it was built from a saved dish that has a photo (or matches one exactly).

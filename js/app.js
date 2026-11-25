@@ -199,16 +199,11 @@
     return '<button class="hero v-' + v + (over ? " over" : "") + '" data-act="goals" aria-label="יעדים"><div class="ringwrap" id="ringwrap">' + ringsSVG(v, f, to) + center + "</div>" +
       '<div class="legend">' + (v === "A" ? lg("kcal", "קלוריות", eaten, g.kcal, "") : "") + macros + "</div></button>";
   }
-  // v14: a logged day "met" its calorie goal when —
-  //   lose: at or under the goal (kcal ≤ goal);
-  //   maintain / gain (and anyone who hasn't picked a goal type): within ±10% of the goal.
-  // A day with no meals is neither met nor missed (the bar stays the empty style).
-  function goalKind() { var t = (S.prefs() || {}).goalType; return t === "lose" || t === "gain" || t === "keep" ? t : "keep"; }
+  // v15: every goal type — a logged day is green when kcal ≤ goal, red only when kcal > goal.
+  // A day with no meals is neither (the bar stays the empty style). No ±10% band.
   function dayGoalClass(kcal) {
     if (!(kcal > 0)) return "";
-    var g = S.goal().kcal;
-    if (goalKind() === "lose") return kcal <= g ? "met" : "miss";
-    return kcal >= g * 0.9 && kcal <= g * 1.1 ? "met" : "miss";
+    return kcal <= S.goal().kcal ? "met" : "miss";
   }
   function weekMini(g) {
     var now = new Date(), week = [], sum = 0, cnt = 0, maxV = g.kcal * 1.15, H = 66;
@@ -534,7 +529,7 @@
     openSheet(head(esc(mealInfo(m.type).title), mealInfo(m.type).ic) + (key !== S.dateKey() ? '<p class="nmdate">' + dayLabel(key) + "</p>" : "") +
       '<div class="items">' + lines + "</div>" +
       '<div class="totline"><span>חלבון ' + n(Math.round(m.totals.protein)) + " · פחמ׳ " + n(Math.round(m.totals.carbs)) + " · שומן " + n(Math.round(m.totals.fat)) + " ג׳ · " + n(String(time.getHours()).padStart(2, "0") + ":" + String(time.getMinutes()).padStart(2, "0")) + "</span><b>" + n(fmt(m.totals.kcal)) + ' <span>קלוריות</span></b></div>' +
-      '<div class="btn2"><button class="btn sec2" data-act="editmeal" data-id="' + m.id + '" data-key="' + key + '">✏️ עריכת הארוחה</button><button class="btn danger" data-act="delmeal" data-id="' + m.id + '" data-key="' + key + '">מחיקה</button></div>');
+      '<div class="btn2"><button class="btn pri" data-act="editmeal" data-id="' + m.id + '" data-key="' + key + '">✏️ עריכת הארוחה</button><button class="btn danger" data-act="delmeal" data-id="' + m.id + '" data-key="' + key + '">מחיקה</button></div>');
   }
   function editMeal(id, key) {
     var m = S.day(key).meals.filter(function (x) { return x.id === id; })[0]; if (!m) return;
@@ -742,7 +737,9 @@
   function renderBuild() {
     var info = mealInfo(draft.meal);
     var past = draft.date !== S.dateKey();
-    $app.innerHTML = '<div class="build"><div class="top"><div class="tt">' + (draft.editId ? '<span class="ed">עריכה</span>' : "") + '<h2 id="mealTitle">' + info.title + "</h2>" + (past ? '<small class="bdate">' + dayLabel(draft.date) + "</small>" : "") + '</div><button class="x" data-act="cancel" aria-label="סגירה">✕</button></div>' +
+    $app.innerHTML = '<div class="build"><div class="top"><div class="tt">' + (draft.editId ? '<span class="ed">עריכה</span>' : "") +
+      '<button class="mchg" data-act="changemeal" aria-label="החלפת סוג הארוחה"><h2 id="mealTitle">' + info.title + '</h2><span class="mchgl">החלפה ▾</span></button>' +
+      (past ? '<small class="bdate">' + dayLabel(draft.date) + "</small>" : "") + '</div><button class="x" data-act="cancel" aria-label="סגירה">✕</button></div>' +
       '<div class="search"><span class="ic">' + ICON.search + '</span><input id="q" type="search" placeholder="חיפוש מרכיב לפי שם" value="' + esc(draft.q) + '" autocomplete="off">' + '<button class="clr" data-act="clearq" aria-label="ניקוי"' + (draft.q ? "" : " hidden") + '>✕</button>' + "</div>" +
       '<div class="seg" id="seg">' + CATS.map(function (c) { return '<button class="' + (!draft.q && c[0] === draft.tab ? "on" : "") + '" data-tab="' + c[0] + '"' + (c[0] === "saved" ? ' aria-label="מנות שמורות" title="מנות שמורות" ' : "") + ">" + c[1] + "</button>"; }).join("") + "</div>" +
       '<div class="list" id="list">' + listHTML() + "</div>" +
@@ -1258,6 +1255,12 @@
         case "toggle": draft.open = !draft.open; refreshBuild(); return;
         case "more": draft.more[draft.tab] = !draft.more[draft.tab]; refreshBuild(); return;
         case "clearq": draft.q = ""; renderBuild(); return;
+        case "changemeal":
+          if (!draft) return;
+          openSheet(head("איזו ארוחה?", "🍽️") + '<div class="mlist">' + MEALS.map(function (m) {
+            return '<button class="mo' + (m.id === draft.meal ? " sel" : "") + '" data-setmeal="' + m.id + '" aria-pressed="' + (m.id === draft.meal) + '"><span class="tile emoji ' + m.tone + '">' + m.ic + '</span><span class="st"><b>' + m.id + "</b><small>" + (/^\d/.test(m.hint) ? n(m.hint) : m.hint) + "</small></span>" + (m.id === draft.meal ? '<span class="lg">✓ נבחר</span>' : "") + '<span class="rad"></span></button>';
+          }).join("") + "</div>", "nm");
+          return;
         case "custom": sheetCustom(draft && location.hash.indexOf("#/build") === 0 ? draft.tab : ui.dbCat); return;
         case "addday":
           var items = draftSnap(); if (!items.length) { toast("עוד לא נבחרו מרכיבים"); return; }
@@ -1347,6 +1350,7 @@
         case "rmphoto": setPhoto(null); toast("התמונה הוסרה"); return;
       }
     }
+    if ((el = t.closest("[data-setmeal]"))) { if (!draft) return; draft.meal = el.getAttribute("data-setmeal"); closeSheet(); renderBuild(); return; }
     if ((el = t.closest("[data-pick]"))) {
       document.querySelectorAll(".mo").forEach(function (m) { m.classList.toggle("sel", m === el); m.setAttribute("aria-pressed", m === el); });
       document.getElementById("goName").textContent = el.getAttribute("data-pick"); return;
