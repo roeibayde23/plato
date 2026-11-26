@@ -20,7 +20,8 @@ Static PWA (vanilla JS, no build). Hebrew RTL, iPhone-first.
     python3 test/v13.py http://127.0.0.1:8781/         # v13: one account = its own data (two users on one browser, sign-out clears the phone, old local data never uploaded), welcome flow (+ WebKit)
     python3 test/v14.py http://127.0.0.1:8781/         # v14: delete/rename/photo in the values DB, meal photo on home, colored header, weekly bars green/red
     python3 test/v15.py http://127.0.0.1:8781/         # v15: kcal ≤ goal is green for every goal type, pastel bars on home / strong on weekly, edit a logged meal from home
-    python3 test/v16.py http://127.0.0.1:8781/         # v16: own-values ingredient entry, +/− toggle on list items, water FAB (3 ideas)
+    python3 test/v16.py http://127.0.0.1:8781/         # v16: own-values ingredient entry, +/− toggle on list items, water FAB (cup sizes + glasses grid)
+    python3 test/v17.py http://127.0.0.1:8781/         # v17: water FAB glass emoji, fireworks when a cup is logged
     (cd supabase/functions/plato-label && deno test --allow-net --allow-env label_test.ts)   # plato-label function unit tests (fake Gemini + fake auth)
     PLATO_E2E_FILE=creds.json python3 test/v8_real.py  # real Supabase e2e with a throwaway, pre-confirmed account (OTP calls stubbed, no mail sent; delete it afterwards)
 Screenshots go to `shots/`.
@@ -60,4 +61,4 @@ Without the secret it answers `503 {"error":"not_configured"}` and the app says 
 ## Water & own-value ingredients (v16)
 - Adding a custom ingredient has two tabs: **לפי 100 גרם** (the existing product + grams flow, including label scan) and **ערכים משלי** (name + kcal / protein / carbs / fat for the portion you ate — not per 100 g). From the meal builder, own-values items are added straight to the meal.
 - In ingredient lists, the ＋ button becomes − after the item is added; tapping − removes it.
-- The floating tip button is replaced by a water FAB. Tapping it opens a sheet with cup sizes (200/250/330/500 + custom) and a grid of glasses for the daily goal; tap a glass to fill or remove. Cup size is asked the first time and can be changed (or long-press the FAB). Daily goal defaults to 35 ml per kg of body weight (or 2,500 ml if weight is unknown).
+- The floating tip button is replaced by a water FAB (🥛 glass emoji, with a progress ring). Tapping it opens a sheet with cup sizes (200/250/330/500 + custom) and a grid of glasses for the daily goal; tap a glass to fill or remove. Cup size is asked the first time and can be changed (or long-press the FAB). Daily goal defaults to 35 ml per kg of body weight (or 2,500 ml if weight is unknown). Logging a cup plays a short (~1 s) blue-and-gold fireworks burst (skipped when `prefers-reduced-motion` is on).

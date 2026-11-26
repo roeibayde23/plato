@@ -374,7 +374,7 @@
     d.innerHTML = '<button class="fab wfab" data-act="waterfab" aria-label="שתיית מים">' +
       '<svg class="wfr" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="23" fill="none" stroke="rgba(74,138,168,.22)" stroke-width="3"/>' +
       '<circle class="wfa" cx="26" cy="26" r="23" fill="none" stroke="#4A8AA8" stroke-width="3" stroke-linecap="round" transform="rotate(-90 26 26)"/></svg>' +
-      '<span class="wdrop">' + ICON.drop + "</span></button>";
+      '<span class="wdrop emoji" aria-hidden="true">🥛</span></button>';
     document.body.appendChild(d); fab.el = d;
     new MutationObserver(function () { document.body.classList.toggle("sheet-open", $sheet.children.length > 0); }).observe($sheet, { childList: true });
     var hold = 0;
@@ -441,8 +441,58 @@
       fabPaint(); toast("הכוס בוטלה");
     });
     if (needHomePaint()) renderHome();
-    if ($sheet.querySelector(".water") && !$sheet.querySelector("#wCupMl")) openWater();
+    // The tracker sheet also has a hidden #wCupMl (custom size); refresh whenever the add button is on screen.
+    if ($sheet.querySelector("[data-act=wateradd]")) openWater();
     fabPaint(); buzz();
+    waterBurst(document.querySelector("[data-act=wateradd]") || (fab.el && fab.el.querySelector(".wfab")));
+  }
+  function waterBurst(originEl) {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (fab.el) { fab.el.classList.remove("fwpop"); void fab.el.offsetWidth; fab.el.classList.add("fwpop"); }
+    if (reduce) return;
+    var prev = document.getElementById("fw"); if (prev) prev.remove();
+    var c = document.createElement("canvas");
+    c.id = "fw"; c.className = "fw"; c.setAttribute("aria-hidden", "true");
+    document.body.appendChild(c);
+    var dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
+    c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    c.style.width = W + "px"; c.style.height = H + "px";
+    var ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var ox = W / 2, oy = H * 0.62;
+    if (originEl) { var r = originEl.getBoundingClientRect(); ox = r.left + r.width / 2; oy = r.top + r.height / 2; }
+    var cols = ["#4A8AA8", "#7EB8C9", "#B8E0EC", "#E8B84A", "#F5D76E", "#FFF6D4", "#5A9BB5", "#D4A017"];
+    var parts = [];
+    function explode(x, y, n, speed) {
+      for (var i = 0; i < n; i++) {
+        var a = (i / n) * Math.PI * 2 + Math.random() * 0.35, s = speed * (0.45 + Math.random());
+        parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1.4, life: 1, decay: 0.02 + Math.random() * 0.022, col: cols[i % cols.length], rad: 1.5 + Math.random() * 2.1, spark: i % 3 === 0 });
+      }
+    }
+    explode(ox, oy, 32, 6.2);
+    var t0 = 0, second = false, third = false;
+    function frame(t) {
+      if (!t0) t0 = t;
+      ctx.clearRect(0, 0, W, H);
+      if (!second && t - t0 > 70) { second = true; explode(ox + 48, oy - 56, 24, 5.2); }
+      if (!third && t - t0 > 150) { third = true; explode(ox - 42, oy - 36, 22, 5); }
+      var alive = 0;
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        p.vy += 0.13; p.x += p.vx; p.y += p.vy; p.vx *= 0.985; p.vy *= 0.985; p.life -= p.decay;
+        if (p.life <= 0) continue;
+        alive++;
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.col;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.rad * (0.55 + p.life * 0.7), 0, Math.PI * 2); ctx.fill();
+        if (p.spark) {
+          ctx.globalAlpha = p.life * 0.45;
+          ctx.beginPath(); ctx.arc(p.x - p.vx * 2.2, p.y - p.vy * 2.2, p.rad * 0.45, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      if (alive && t - t0 < 1050) requestAnimationFrame(frame);
+      else if (c.parentNode) c.remove();
+    }
+    requestAnimationFrame(frame);
   }
   function needHomePaint() { var h = location.hash || "#/"; return h === "#/" || h === "" || h === "#"; }
   function openWater() { return sheetWaterB(); }
@@ -1466,6 +1516,10 @@
           } else {
             var addn = idx + 1 - have;
             for (var a = 0; a < addn; a++) S.addWater(cup);
+            if (needHomePaint()) renderHome();
+            openWater(); fabPaint(); buzz();
+            waterBurst(document.querySelector("[data-act=wateradd]") || document.querySelector(".wglass.full"));
+            return;
           }
           if (needHomePaint()) renderHome();
           openWater(); fabPaint(); return;
